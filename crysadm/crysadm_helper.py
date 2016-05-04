@@ -7,17 +7,7 @@ from datetime import datetime, timedelta
 from multiprocessing import Process
 from multiprocessing.dummy import Pool as ThreadPool
 import threading
-from threading import Thread
-from flask.ext.mail import Mail,Message
-import re
 
-app = Flask(__name__)
-app.config['MAIL_SERVER'] = 'smtp.163.com'
-app.config['MAIL_PORT'] = '25'
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = '你的邮件地址'
-app.config['MAIL_PASSWORD'] = '你的SMTP秘钥'
-mail = Mail(app)
 
 conf = None
 if socket.gethostname() == 'GXMBP.local':
@@ -30,6 +20,7 @@ else:
 redis_conf = conf.REDIS_CONF
 pool = redis.ConnectionPool(host=redis_conf.host, port=redis_conf.port, db=redis_conf.db, password=redis_conf.password)
 r_session = redis.Redis(connection_pool=pool)
+
 
 from api import *
 
@@ -82,7 +73,6 @@ def get_data(username):
                 account_data['privilege'] = get_privilege(cookies)
             else:
                 account_data = json.loads(exist_account_data.decode('utf-8'))
-                last_account_data = json.loads(exist_account_data.decode('utf-8'))
 
             if account_data.get('updated_time') is not None:
                 last_updated_time = datetime.strptime(account_data.get('updated_time'), '%Y-%m-%d %H:%M:%S')
@@ -107,33 +97,6 @@ def get_data(username):
                 if r.get('r') == 0:
                     r_session.setex('can_drawcash', r.get('is_tm'), 60)
 
-            status_dict={}
-            space_dict={}
-            user_key = '%s:%s' % ('user', username)
-            user_info = json.loads(r_session.get(user_key).decode('utf-8'))
-
-            cookies['user_info']=user_info
-            for dev in last_account_data['device_info']:
-                status_dict[dev['device_name']]=dev['status']
-                for i,client in enumerate(dev['dcdn_clients']):
-                    space_dict['%s_%s' % (dev['device_name'],i)]=client['space_used']
-            if account_data['device_info'] is not None:
-                for dev in account_data['device_info']:
-                    status_last=status_dict[dev['device_name']]
-                    if dev['dcdn_clients'] is not None: 
-                        if dev['status'] != 'online':
-                            if status_last is not None and dev['status'] is not None and status_last == 'online':
-                                red_log(cookies, '矿机异常', '状态', '%s:%s -> %s' % (dev['device_name'],status_last,dev['status'],))
-                                if validateEmail(user_info['mail_address']) == 1:
-                                    msg = Message('矿机异常',sender=app.config['MAIL_USERNAME'],recipients=[user_info['mail_address']])
-                                    msg.body = '您的矿机:%s\n状态： %s -> %s\n时间:%s' % (dev['device_name'],status_dict[dev['device_name']],dev['status'],datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                                    msg.html = '您的矿机:%s<br />状态： %s -> %s<br />时间:%s' % (dev['device_name'],status_dict[dev['device_name']],dev['status'],datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-                                    thread = Thread(target=send_async_email,args=[app,msg])
-                                    thread.start()
-                        for i,client in enumerate(dev['dcdn_clients']):
-                            space_last=space_dict['%s_%s' % (dev['device_name'],i)]
-                            if space_last is not None and client['space_used'] is not None and int(client['space_used'])<int(space_last):
-                                red_log(cookies, '缓存变动', '状态', '%s: %.2fGB -> %.2fGB' % (dev['device_name'],float(space_last)/1024/1024/1024),float(client['space_used'])/1024/1024/1024)
         if start_time.day == datetime.now().day:
             save_history(username)
 
@@ -142,6 +105,7 @@ def get_data(username):
 
     except Exception as ex:
         print(username.encode('utf-8'), 'failed', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), ex)
+
 
 # 保存历史数据
 def save_history(username):
@@ -289,6 +253,7 @@ def select_auto_task_user():
     auto_searcht_accounts = []
     auto_revenge_accounts = []
     auto_getaward_accounts = []
+    auto_detect_accounts = []
     for b_user in r_session.mget(*['user:%s' % name.decode('utf-8') for name in r_session.smembers('users')]):
         user_info = json.loads(b_user.decode('utf-8'))
         if not user_info.get('active'): continue
@@ -307,6 +272,7 @@ def select_auto_task_user():
             if user_info.get('auto_searcht'): auto_searcht_accounts.append(cookies)
             if user_info.get('auto_revenge'): auto_revenge_accounts.append(cookies)
             if user_info.get('auto_getaward'): auto_getaward_accounts.append(cookies)
+            if user_info.get('auto_detect'): auto_detect_accounts.append(cookies)
     r_session.delete('global:auto.collect.cookies')
     r_session.sadd('global:auto.collect.cookies', *auto_collect_accounts)
     r_session.delete('global:auto.drawcash.cookies')
@@ -319,6 +285,64 @@ def select_auto_task_user():
     r_session.sadd('global:auto.revenge.cookies', *auto_revenge_accounts)
     r_session.delete('global:auto.getaward.cookies')
     r_session.sadd('global:auto.getaward.cookies', *auto_getaward_accounts)
+    r_session.delete('global:auto.detect.cookies')
+    r_session.sadd('global:auto.detect.cookies', *auto_detect_accounts)
+
+# 执行检测异常矿机函数
+def detect_exception(user, cookies, user_info):
+    from mailsand import send_email
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'detect_exception')
+    config_key = '%s:%s' % ('user', 'system')
+    config_info = json.loads(r_session.get(config_key).decode('utf-8'))
+    account_data_key = 'account:%s:%s:data' % (user_info.get('username'), user.get('userid'))
+    user_key = '%s:%s' % ('user', user_info.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+    exist_account_data = r_session.get(account_data_key)
+    if exist_account_data is None: return
+    account_data = json.loads(exist_account_data.decode('utf-8'))
+    if not 'device_info' in account_data.keys(): return
+    need_clear=True
+    last_exception_key='last_exception:%s' % user.get('userid')
+    if 'detect_info' not in user_info.keys():
+        detect_info={}
+    else:
+        detect_info=user_info['detect_info']
+    for dev in account_data['device_info']:
+        if dev['status'] != 'online':
+            status_cn={'offline':'离线','online':'在线','exception':'异常'}
+            if last_exception_key in detect_info.keys():
+                last_time=datetime.strptime(detect_info[last_exception_key],'%Y-%m-%d %H:%M:%S')
+                if (datetime.now() - last_time).seconds > 30:
+                    if 'last_warn' not in detect_info.keys() or (datetime.now() - datetime.strptime(detect_info['last_warn'],'%Y-%m-%d %H:%M:%S')).seconds > 60*60:
+                        if 'warn_reset' not in detect_info.keys() or detect_info['warn_reset']:
+                            if validateEmail(user_info['mail_address']) == 1:
+                                mail = dict()
+                                mail['to'] = user_info['mail_address']
+                                mail['subject'] = '云监工-矿机异常'
+                                mail['text'] = ''.join(['您的矿机：',dev['device_name'],'<br />状态：',status_cn[dev['status']] ,'<br />时间：',datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+                                send_email(mail,config_info)
+                                detect_info['warn_reset']=False
+                                detect_info['last_warn']=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                red_log(user, '矿机异常', '状态', '%s:%s -> %s' % (dev['device_name'],'在线',status_cn[dev['status']]))
+                detect_info[last_exception_key]=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            need_clear=False
+        if 'dcdn_clients' in dev.keys():
+            for i,client in enumerate(dev['dcdn_clients']):
+                if ('space_%s:%s' % (i,user.get('userid'))) in detect_info.keys():
+                    last_space=detect_info['space_%s:%s:%s' % (i,user.get('userid'),dev['device_name'])]
+                    if last_space - 100*1024*1024 > int(client['space_used']):
+                        red_log(user, '缓存变动', '状态', '%s: %.2fGB -> %.2fGB' % (dev['device_name'],float(last_space)/1024/1024/1024,float(client['space_used'])/1024/1024/1024))
+                        detect_info['space_%s:%s:%s' % (i,user.get('userid'),dev['device_name'])] = int(client['space_used'])
+                    elif last_space < int(client['space_used']):
+                        detect_info['space_%s:%s:%s' % (i,user.get('userid'),dev['device_name'])] = int(client['space_used'])
+                else:
+                   detect_info['space_%s:%s:%s' % (i,user.get('userid'),dev['device_name'])] = int(client['space_used'])
+    if need_clear == True:
+        detect_info['warn_reset']=True
+        detect_info.pop(last_exception_key,'^.^')
+    user_info['detect_info']=detect_info
+    r_session.set(user_key, json.dumps(user_info))
 
 # 执行收取水晶函数
 def check_collect(user, cookies, user_info):
@@ -326,9 +350,11 @@ def check_collect(user, cookies, user_info):
     mine_info = get_mine_info(cookies)
     time.sleep(2)
     if mine_info.get('r') != 0: return
-    limit=user_info.get('collect_crystal_modify')
-    if limit is None:
+    if 'collect_crystal_modify' in user_info.keys():
+        limit=user_info.get('collect_crystal_modify')
+    else:
         limit=16000;
+
     if mine_info.get('td_not_in_a') > limit:
         r = collect(cookies)
         if r.get('rd') != 'ok':
@@ -341,9 +367,10 @@ def check_collect(user, cookies, user_info):
 # 执行自动提现的函数
 def check_drawcash(user, cookies, user_info):
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'check_drawcash')
-    limit=user_info.get('draw_money_modify')
-    if limit is None:
-        limit=10.0;
+    if 'draw_money_modify' in user_info.keys():
+        limit=user_info.get('draw_money_modify')
+    else:
+        limit=10.0
     r = exec_draw_cash(cookies=cookies, limits=limit)
     red_log(user, '自动执行', '提现', r.get('rd'))
     time.sleep(3)
@@ -486,7 +513,7 @@ def drawcash_crystal():
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'drawcash_crystal')
     time_now = datetime.now()
     if int(time_now.isoweekday()) != 2: return
-    if int(time_now.hour) < 11 or int(time_now.hour) > 18: return
+    if int(time_now.hour) < 12 or int(time_now.hour) > 18: return
 
     cookies_auto(check_drawcash, 'global:auto.drawcash.cookies')
 #    for cookie in r_session.smembers('global:auto.drawcash.cookies'):
@@ -524,10 +551,13 @@ def getaward_crystal():
 #    for cookie in r_session.smembers('global:auto.getaward.cookies'):
 #        check_getaward(json.loads(cookie.decode('utf-8')))
 
-#异步发送邮件
-def send_async_email(app,msg):
-    with app.app_context():
-        mail.send(msg)
+# 自动监测
+def auto_detect():
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'auto_detect')
+
+    cookies_auto(detect_exception, 'global:auto.detect.cookies')
+#    for cookie in r_session.smembers('global:auto.getaward.cookies'):
+#        check_getaward(json.loads(cookie.decode('utf-8')))
 
 
 # 处理函数[重组]
@@ -592,36 +622,62 @@ def timer(func, seconds):
         time.sleep(seconds)
 
 if __name__ == '__main__':
+    config_key = '%s:%s' % ('user', 'system')
+    r_config_info = r_session.get(config_key)
+    if r_config_info is None:
+        config_info = {
+            'collect_crystal_interval':30,
+            'drawcash_crystal_interval':60,
+            'giftbox_crystal_interval':40,
+            'searcht_crystal_interval':360,
+            'revenge_crystal_interval':300,
+            'getaward_crystal_interval':240,
+            'get_online_user_data_interval':30,
+            'get_offline_user_data_interval':600,
+            'clear_offline_user_interval':1,
+            'select_auto_task_user_interval':10,
+            'auto_detect_interval':5,
+            'master_mail_smtp':'smtp.163.com',
+            'master_mail_address':'xxxxxxxx@163.com',
+            'master_mail_password':'xxxxxxxxxxxxxx',
+        }
+        r_session.set(config_key, json.dumps(config_info))
+    else:
+        config_info = json.loads(r_config_info.decode('utf-8'))
+
     # 如有任何疑问及Bug欢迎加入L.k群讨论
     # 执行收取水晶时间，单位为秒，默认为30秒。
     # 每30分钟检测一次收取水晶
-    threading.Thread(target=timer, args=(collect_crystal, 60*30)).start()
+    threading.Thread(target=timer, args=(collect_crystal, config_info['collect_crystal_interval']*60)).start()
     # 执行自动提现时间，单位为秒，默认为60秒。
     # 每60分钟检测一次自动提现
-    threading.Thread(target=timer, args=(drawcash_crystal, 60*60)).start()
+    threading.Thread(target=timer, args=(drawcash_crystal, config_info['drawcash_crystal_interval']*60)).start()
     # 执行免费宝箱时间，单位为秒，默认为40秒。
     # 每40分钟检测一次免费宝箱
-    threading.Thread(target=timer, args=(giftbox_crystal, 60*40)).start()
+    threading.Thread(target=timer, args=(giftbox_crystal, config_info['giftbox_crystal_interval']*60)).start()
     # 执行秘银进攻时间，单位为秒，默认为360秒。
     # 每360分钟检测一次秘银进攻
-    threading.Thread(target=timer, args=(searcht_crystal, 60*60*6)).start()
+    threading.Thread(target=timer, args=(searcht_crystal, config_info['searcht_crystal_interval']*60)).start()
     # 执行秘银复仇时间，单位为秒，默认为300秒。
     # 每300分钟检测一次秘银复仇
-    threading.Thread(target=timer, args=(revenge_crystal, 60*60*5)).start()
+    threading.Thread(target=timer, args=(revenge_crystal, config_info['revenge_crystal_interval']*60)).start()
     # 执行幸运转盘时间，单位为秒，默认为240秒。
     # 每240分钟检测一次幸运转盘
-    threading.Thread(target=timer, args=(getaward_crystal, 60*60*4)).start()
+    threading.Thread(target=timer, args=(getaward_crystal, config_info['getaward_crystal_interval']*60)).start()
+    # 执行自动监测时间，单位为秒，默认为300秒。
+    # 每5分钟检测一次矿机状态
+    threading.Thread(target=timer, args=(auto_detect, config_info['auto_detect_interval']*60)).start()
     # 刷新在线用户数据，单位为秒，默认为30秒。
     # 每30秒刷新一次在线用户数据
-    threading.Thread(target=timer, args=(get_online_user_data, 30)).start()
+    threading.Thread(target=timer, args=(get_online_user_data, config_info['get_online_user_data_interval'])).start()
     # 刷新离线用户数据，单位为秒，默认为60秒。
     # 每10分钟刷新一次离线用户数据
-    threading.Thread(target=timer, args=(get_offline_user_data, 60*10)).start()
+    threading.Thread(target=timer, args=(get_offline_user_data, config_info['get_offline_user_data_interval'])).start()
     # 从在线用户列表中清除离线用户，单位为秒，默认为60秒。
     # 每分钟检测离线用户
-    threading.Thread(target=timer, args=(clear_offline_user, 60)).start()
+    threading.Thread(target=timer, args=(clear_offline_user, config_info['clear_offline_user_interval']*60)).start()
     # 刷新选择自动任务的用户，单位为秒，默认为10分钟
-    threading.Thread(target=timer, args=(select_auto_task_user, 60*10)).start()
+    threading.Thread(target=timer, args=(select_auto_task_user, config_info['select_auto_task_user_interval']*60)).start()
     while True:
         time.sleep(1)
 

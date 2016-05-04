@@ -291,7 +291,7 @@ def DoD_income_yuanjiangong():
 
     user_key = '%s:%s' % ('user', user.get('username'))
     user_info = json.loads(r_session.get(user_key).decode('utf-8'))
-    if user_info['is_show_speed_data'] is not None and user_info['is_show_speed_data'] == False:
+    if 'is_show_speed_data' in user_info.keys() and user_info['is_show_speed_data'] == False:
         return Response(json.dumps(dict(series=[yesterday_series, today_series, yesterday_speed_series, today_speed_series],data=dict(last_day_income=yesterday_last_value, dod_income_value=dod_income_value,expected_income=expected_income))), mimetype='application/json')
     else:
         return Response(json.dumps(dict(series=[yesterday_series, today_series],data=dict(last_day_income=yesterday_last_value, dod_income_value=dod_income_value,expected_income=expected_income))), mimetype='application/json')
@@ -370,7 +370,7 @@ def DoD_income_xunlei():
 
     user_key = '%s:%s' % ('user', user.get('username'))
     user_info = json.loads(r_session.get(user_key).decode('utf-8'))
-    if user_info['is_show_speed_data'] is not None and user_info['is_show_speed_data'] == False:
+    if 'is_show_speed_data' in user_info.keys() and user_info['is_show_speed_data'] == False:
         return Response(json.dumps(dict(series=[yesterday_series, today_series, yesterday_speed_series, today_speed_series],data=dict(last_day_income=yesterday_last_value, dod_income_value=dod_income_value,expected_income=expected_income))), mimetype='application/json')
     else:
         return Response(json.dumps(dict(series=[yesterday_series, today_series],data=dict(last_day_income=yesterday_last_value, dod_income_value=dod_income_value,expected_income=expected_income))), mimetype='application/json')

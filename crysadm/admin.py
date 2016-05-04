@@ -151,7 +151,18 @@ def admin_change_property(field, value, username):
         user_info['auto_revenge'] = True if value == '1' else False
     elif field == 'auto_getaward':
         user_info['auto_getaward'] = True if value == '1' else False
-
+    elif field.endswith('_interval'):
+        try:
+            if int(str(request.values.get(field))) >= 1:
+                user_info[field] = int(str(request.values.get(field)))
+                r_session.set(user_key, json.dumps(user_info))
+        except ValueError:
+            print(ValueError)
+        return redirect('/admin/settings')
+    elif field.find('_mail_') != -1:
+        user_info[field] = str(request.values.get(field))
+        r_session.set(user_key, json.dumps(user_info))
+        return redirect('/admin/settings')
     r_session.set(user_key, json.dumps(user_info))
 
     return redirect(url_for(endpoint='admin_user_management', username=username))
@@ -280,6 +291,24 @@ def admin_message_send():
 
     return redirect(url_for(endpoint='admin_message'))
 
+@app.route('/admin/settings')
+@requires_admin
+def system_config():
+
+    config_key = '%s:%s' % ('user', 'system')
+    config_info = json.loads(r_session.get(config_key).decode('utf-8'))
+
+    err_msg = None
+    if session.get('error_message') is not None:
+        err_msg = session.get('error_message')
+        session['error_message'] = None
+    action = None
+    if session.get('action') is not None:
+        action = session.get('action')
+        session['action'] = None
+
+    return render_template('admin_settings.html', user_info=config_info, err_msg=err_msg, action=action)
+
 # 站长交流
 @app.route('/talk')
 @requires_admin
@@ -356,5 +385,5 @@ def guest_invitation_delete():
 @requires_admin
 def admin_about():
     import platform
-    version = '当前版本：2016-05-01'
+    version = '当前版本：2016-05-04'
     return render_template('about.html', platform=platform, version=version)
