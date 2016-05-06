@@ -174,8 +174,8 @@ def save_income_history(username, pdc_detail):
     if b_income_history is not None:
         income_history = json.loads(b_income_history.decode('utf-8'))
 
-    if now.minute < 50:
-        return
+#    if now.minute < 50:
+#        return
 
     if income_history.get(now.strftime('%Y-%m-%d')) is None:
         income_history[now.strftime('%Y-%m-%d')] = dict()
@@ -215,7 +215,7 @@ def get_online_user_data():
 def get_offline_user_data():
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'get_offline_user_data')
     if r_session.exists('api_error_info'): return
-    if datetime.now().minute < 50: return
+#    if datetime.now().minute < 50: return
 
     offline_users = []
     for b_user in r_session.mget(*['user:%s' % name.decode('utf-8') for name in r_session.sdiff('users', *r_session.smembers('global:online.users'))]):
@@ -626,17 +626,17 @@ if __name__ == '__main__':
     r_config_info = r_session.get(config_key)
     if r_config_info is None:
         config_info = {
-            'collect_crystal_interval':30,
-            'drawcash_crystal_interval':60,
-            'giftbox_crystal_interval':40,
-            'searcht_crystal_interval':360,
-            'revenge_crystal_interval':300,
-            'getaward_crystal_interval':240,
+            'collect_crystal_interval':30*60,
+            'drawcash_crystal_interval':60*60,
+            'giftbox_crystal_interval':40*60,
+            'searcht_crystal_interval':360*60,
+            'revenge_crystal_interval':300*60,
+            'getaward_crystal_interval':240*60,
             'get_online_user_data_interval':30,
             'get_offline_user_data_interval':600,
-            'clear_offline_user_interval':1,
-            'select_auto_task_user_interval':10,
-            'auto_detect_interval':5,
+            'clear_offline_user_interval':60,
+            'select_auto_task_user_interval':10*60,
+            'auto_detect_interval':5*60,
             'master_mail_smtp':'smtp.163.com',
             'master_mail_address':'xxxxxxxx@163.com',
             'master_mail_password':'xxxxxxxxxxxxxx',
@@ -648,25 +648,25 @@ if __name__ == '__main__':
     # 如有任何疑问及Bug欢迎加入L.k群讨论
     # 执行收取水晶时间，单位为秒，默认为30秒。
     # 每30分钟检测一次收取水晶
-    threading.Thread(target=timer, args=(collect_crystal, config_info['collect_crystal_interval']*60)).start()
+    threading.Thread(target=timer, args=(collect_crystal, config_info['collect_crystal_interval'])).start()
     # 执行自动提现时间，单位为秒，默认为60秒。
     # 每60分钟检测一次自动提现
-    threading.Thread(target=timer, args=(drawcash_crystal, config_info['drawcash_crystal_interval']*60)).start()
+    threading.Thread(target=timer, args=(drawcash_crystal, config_info['drawcash_crystal_interval'])).start()
     # 执行免费宝箱时间，单位为秒，默认为40秒。
     # 每40分钟检测一次免费宝箱
-    threading.Thread(target=timer, args=(giftbox_crystal, config_info['giftbox_crystal_interval']*60)).start()
+    threading.Thread(target=timer, args=(giftbox_crystal, config_info['giftbox_crystal_interval'])).start()
     # 执行秘银进攻时间，单位为秒，默认为360秒。
     # 每360分钟检测一次秘银进攻
-    threading.Thread(target=timer, args=(searcht_crystal, config_info['searcht_crystal_interval']*60)).start()
+    threading.Thread(target=timer, args=(searcht_crystal, config_info['searcht_crystal_interval'])).start()
     # 执行秘银复仇时间，单位为秒，默认为300秒。
     # 每300分钟检测一次秘银复仇
-    threading.Thread(target=timer, args=(revenge_crystal, config_info['revenge_crystal_interval']*60)).start()
+    threading.Thread(target=timer, args=(revenge_crystal, config_info['revenge_crystal_interval'])).start()
     # 执行幸运转盘时间，单位为秒，默认为240秒。
     # 每240分钟检测一次幸运转盘
-    threading.Thread(target=timer, args=(getaward_crystal, config_info['getaward_crystal_interval']*60)).start()
+    threading.Thread(target=timer, args=(getaward_crystal, config_info['getaward_crystal_interval'])).start()
     # 执行自动监测时间，单位为秒，默认为300秒。
     # 每5分钟检测一次矿机状态
-    threading.Thread(target=timer, args=(auto_detect, config_info['auto_detect_interval']*60)).start()
+    threading.Thread(target=timer, args=(auto_detect, config_info['auto_detect_interval'])).start()
     # 刷新在线用户数据，单位为秒，默认为30秒。
     # 每30秒刷新一次在线用户数据
     threading.Thread(target=timer, args=(get_online_user_data, config_info['get_online_user_data_interval'])).start()
@@ -675,9 +675,9 @@ if __name__ == '__main__':
     threading.Thread(target=timer, args=(get_offline_user_data, config_info['get_offline_user_data_interval'])).start()
     # 从在线用户列表中清除离线用户，单位为秒，默认为60秒。
     # 每分钟检测离线用户
-    threading.Thread(target=timer, args=(clear_offline_user, config_info['clear_offline_user_interval']*60)).start()
+    threading.Thread(target=timer, args=(clear_offline_user, config_info['clear_offline_user_interval'])).start()
     # 刷新选择自动任务的用户，单位为秒，默认为10分钟
-    threading.Thread(target=timer, args=(select_auto_task_user, config_info['select_auto_task_user_interval']*60)).start()
+    threading.Thread(target=timer, args=(select_auto_task_user, config_info['select_auto_task_user_interval'])).start()
     while True:
         time.sleep(1)
 

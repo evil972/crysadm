@@ -263,6 +263,30 @@ def user_change_info():
     return redirect(url_for('user_profile'))
 
 
+@app.route('/user/turn<field>', methods=['POST'])
+@requires_auth
+def user_turn(field):
+    user = session.get('user_info')
+    user_key = '%s:%s' % ('user', user.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+    if field == 'income':
+       if 'auto_column' in user_info.keys():
+           user_info['auto_column'] = True if user_info['auto_column'] == False else False 
+       else:
+           user_info['auto_column'] = True
+    elif field == 'speed':
+       if 'is_show_speed_data' in user_info.keys():
+           user_info['is_show_speed_data'] = True if user_info['is_show_speed_data'] == False else False 
+       else:
+           user_info['is_show_speed_data'] = True
+    elif field == 'award':
+       if 'is_show_wpdc' in user_info.keys():
+           user_info['is_show_wpdc'] = (user_info['is_show_wpdc'] + 1) % 3
+       else:
+           user_info['is_show_wpdc'] = 0
+    r_session.set(user_key, json.dumps(user_info))
+    return redirect(url_for('dashboard'))
+
 @app.route('/user/change_property/<field>/<value>', methods=['POST'])
 @requires_auth
 def user_change_property(field, value):
@@ -270,6 +294,17 @@ def user_change_property(field, value):
     user_key = '%s:%s' % ('user', user.get('username'))
 
     user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+    config_key = '%s:%s' % ('user', 'system')
+    config_info = json.loads(r_session.get(config_key).decode('utf-8'))
+
+    err_msg = None
+    if session.get('error_message') is not None:
+        err_msg = session.get('error_message')
+        session['error_message'] = None
+    action = None
+    if session.get('action') is not None:
+        action = session.get('action')
+        session['action'] = None
 
     if field == 'auto_column':
         user_info['auto_column'] = True if value == '1' else False
