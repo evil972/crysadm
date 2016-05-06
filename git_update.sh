@@ -1,8 +1,8 @@
 #!/bin/bash
 cp -frp crysadm crysadm.old
-cd 2
+cd tmp
 git clone https://github.com/evil972/yjg.git
 rm crysadm/crysadm/config.py
-cp -frp crysadm/crysadm/* ../crysadm/
+cp -frp yjg/tmp/crysadm/* ../yjg/
 ../run.sh
 rm -rf *
