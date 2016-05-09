@@ -337,6 +337,9 @@ def user_change_property(field, value):
     if field == 'auto_detect':
         user_info['auto_detect'] = True if value == '1' else False
         session['action'] = 'profile'
+    if field == 'auto_report':
+        user_info['auto_report'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'collect_crystal_modify':
         try:
             if int(str(request.values.get('collect_crystal_modify'))) >= 3000:

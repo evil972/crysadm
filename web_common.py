@@ -17,8 +17,6 @@ def __get_yesterday_pdc(username):
 
     yesterday_m_pdc = 0
     yesterday_w_pdc = 0
-    yesterday_m_award_income = 0
-    yesterday_w_award_income = 0
 
     while begin_date < today.date():
         begin_date = begin_date + timedelta(days=1)
@@ -32,12 +30,10 @@ def __get_yesterday_pdc(username):
         history_data = json.loads(b_data.decode('utf-8'))
         if begin_date >= month_start_date and begin_date < today.date():
             yesterday_m_pdc += history_data.get('pdc')
-            yesterday_m_award_income += history_data.get('award_income')
         if begin_date >= week_start_date and begin_date < today.date():
             yesterday_w_pdc += history_data.get('pdc')
-            yesterday_w_award_income += history_data.get('award_income')
 
-    return yesterday_m_pdc, yesterday_w_pdc, yesterday_m_award_income, yesterday_w_award_income
+    return yesterday_m_pdc, yesterday_w_pdc
 
 # 显示控制面板
 @app.route('/dashboard')
@@ -81,22 +77,17 @@ def dashboard_data():
         return Response(json.dumps(dict(today_data=empty_data)), mimetype='application/json')
     today_data = json.loads(b_data.decode('utf-8'))
     need_save = False
-    if today_data.get('yesterday_m_pdc') is None or today_data.get('yesterday_w_pdc') is None or today_data.get('yesterday_w_award_income') is None or today_data.get('yesterday_m_award_income') is None:
-        yesterday_m_pdc, yesterday_w_pdc, yesterday_m_award_income, yesterday_w_award_income = __get_yesterday_pdc(username)
+    if today_data.get('yesterday_m_pdc') is None or today_data.get('yesterday_w_pdc') is None:
+        yesterday_m_pdc, yesterday_w_pdc = __get_yesterday_pdc(username)
         today_data['yesterday_m_pdc'] = yesterday_m_pdc
         today_data['yesterday_w_pdc'] = yesterday_w_pdc
-        today_data['yesterday_m_award_income'] = yesterday_m_award_income
-        today_data['yesterday_w_award_income'] = yesterday_w_award_income
         need_save = True
 
     today_data['m_pdc'] = today_data.get('yesterday_m_pdc') + today_data.get('pdc')
     today_data['w_pdc'] = today_data.get('yesterday_w_pdc') + today_data.get('pdc')
-    today_data['m_award_income'] = today_data.get('yesterday_m_award_income') + today_data.get('award_income')
-    today_data['w_award_income'] = today_data.get('yesterday_w_award_income') + today_data.get('award_income')
 
     if need_save:
         r_session.set(key, json.dumps(today_data))
-    today_data['pdc'] -= today_data.get('award_income')
     if user_info.get('is_show_wpdc') is None or user_info.get('is_show_wpdc') == 0:
         today_data['w_award_income'] = today_data.get('award_income')
     elif user_info.get('is_show_wpdc') == 2:

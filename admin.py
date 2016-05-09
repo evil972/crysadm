@@ -296,6 +296,7 @@ def admin_message_send():
 @requires_admin
 def test_email():
     from mailsand import send_email
+    from mailsand import validateEmail
     config_key = '%s:%s' % ('user', 'system')
     config_info = json.loads(r_session.get(config_key).decode('utf-8'))
 
@@ -304,8 +305,8 @@ def test_email():
     user_info = json.loads(r_session.get(user_key).decode('utf-8'))
 
     session['action'] = 'info'
-    if 'mail_address' not in user_info.keys():
-       session['error_message']='该账户的提醒邮件地址未设置，无法测试'
+    if 'mail_address' not in user_info.keys() or not validateEmail(user_info["mail_address"]):
+       session['error_message']='该账户的提醒邮件地址设置不正确，无法测试'
        return redirect(url_for('system_config'))
     mail = dict()
     mail['to'] = user_info['mail_address']
