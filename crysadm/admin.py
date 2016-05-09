@@ -158,11 +158,12 @@ def admin_change_property(field, value, username):
                 r_session.set(user_key, json.dumps(user_info))
         except ValueError:
             print(ValueError)
-        return redirect('/admin/settings')
+        return redirect(url_for('system_config'))
     elif field.find('_mail_') != -1:
+        session['action'] = 'info'
         user_info[field] = str(request.values.get(field))
         r_session.set(user_key, json.dumps(user_info))
-        return redirect('/admin/settings')
+        return redirect(url_for('system_config'))
     r_session.set(user_key, json.dumps(user_info))
 
     return redirect(url_for(endpoint='admin_user_management', username=username))
@@ -291,10 +292,33 @@ def admin_message_send():
 
     return redirect(url_for(endpoint='admin_message'))
 
+@app.route('/admin/test_email', methods=['POST'])
+@requires_admin
+def test_email():
+    from mailsand import send_email
+    from mailsand import validateEmail
+    config_key = '%s:%s' % ('user', 'system')
+    config_info = json.loads(r_session.get(config_key).decode('utf-8'))
+
+    user = session.get('user_info')
+    user_key = '%s:%s' % ('user', user.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+
+    session['action'] = 'info'
+    if 'mail_address' not in user_info.keys() or not validateEmail(user_info["mail_address"]):
+       session['error_message']='该账户的提醒邮件地址设置不正确，无法测试'
+       return redirect(url_for('system_config'))
+    mail = dict()
+    mail['to'] = user_info['mail_address']
+    mail['subject'] = '云监工-测试邮件'
+    mail['text'] = '这只是一个测试邮件，你更应该关注的不是这里面写了什么。不是么？'
+    send_email(mail,config_info)
+    return redirect(url_for('system_config'))
+
+
 @app.route('/admin/settings')
 @requires_admin
 def system_config():
-
     config_key = '%s:%s' % ('user', 'system')
     config_info = json.loads(r_session.get(config_key).decode('utf-8'))
 
@@ -385,5 +409,5 @@ def guest_invitation_delete():
 @requires_admin
 def admin_about():
     import platform
-    version = '当前版本：2016-05-04'
+    version = '当前版本：2016-05-01'
     return render_template('about.html', platform=platform, version=version)

@@ -310,16 +310,22 @@ def user_change_property(field, value):
         user_info['auto_column'] = True if value == '1' else False
     if field == 'auto_collect':
         user_info['auto_collect'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'auto_drawcash':
         user_info['auto_drawcash'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'auto_giftbox':
         user_info['auto_giftbox'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'auto_searcht':
         user_info['auto_searcht'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'auto_revenge':
         user_info['auto_revenge'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'auto_getaward':
         user_info['auto_getaward'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'is_show_speed_data':
         user_info['is_show_speed_data'] = True if value == '1' else False
     if field == 'is_show_wpdc':
@@ -330,6 +336,10 @@ def user_change_property(field, value):
         user_info['mail_address'] = request.values.get('mail_address')
     if field == 'auto_detect':
         user_info['auto_detect'] = True if value == '1' else False
+        session['action'] = 'profile'
+    if field == 'auto_report':
+        user_info['auto_report'] = True if value == '1' else False
+        session['action'] = 'profile'
     if field == 'collect_crystal_modify':
         try:
             if int(str(request.values.get('collect_crystal_modify'))) >= 3000:
