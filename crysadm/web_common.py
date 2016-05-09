@@ -102,6 +102,10 @@ def dashboard_speed_share():
     username = user.get('username')
     accounts_key = 'accounts:%s' % username
 
+    account_key = ['account:%s:%s:data' % (username, name.decode('utf-8')) for name in sorted(r_session.smembers(accounts_key))]
+    if len(account_key) == 0:
+        return Response(json.dumps(dict(data=[])), mimetype='application/json')
+
     drilldown_data = []
     for b_acct in r_session.mget(*['account:%s:%s:data' % (username, name.decode('utf-8'))
                                    for name in sorted(r_session.smembers(accounts_key))]):
@@ -136,6 +140,10 @@ def dashboard_speed_detail():
     username = user.get('username')
     accounts_key = 'accounts:%s' % username
 
+    account_key = ['account:%s:%s:data' % (username, name.decode('utf-8')) for name in sorted(r_session.smembers(accounts_key))]
+    if len(account_key) == 0:
+        return Response(json.dumps(dict(data=[])), mimetype='application/json')
+
     device_speed = []
     for b_acct in r_session.mget(*['account:%s:%s:data' % (username, name.decode('utf-8'))
                                    for name in sorted(r_session.smembers(accounts_key))]):
@@ -168,6 +176,10 @@ def dashboard_today_income_share():
     user = session.get('user_info')
     username = user.get('username')
     accounts_key = 'accounts:%s' % username
+
+    account_key = ['account:%s:%s:data' % (username, name.decode('utf-8')) for name in sorted(r_session.smembers(accounts_key))]
+    if len(account_key) == 0:
+        return Response(json.dumps(dict(data=[])), mimetype='application/json')
 
     pie_data = []
     for b_acct in r_session.mget(*['account:%s:%s:data' % (username, name.decode('utf-8'))
