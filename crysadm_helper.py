@@ -74,6 +74,10 @@ def get_data(username):
             else:
                 account_data = json.loads(exist_account_data.decode('utf-8'))
 
+            balance_log = get_balance_log(cookies)
+            if balance_log.get('r') == 0 and 'ioi' in balance_log.keys():
+                account_data['ioi'] = balance_log['ioi']
+                
             if account_data.get('updated_time') is not None:
                 last_updated_time = datetime.strptime(account_data.get('updated_time'), '%Y-%m-%d %H:%M:%S')
                 if last_updated_time.hour != datetime.now().hour:
@@ -85,6 +89,7 @@ def get_data(username):
             account_data['mine_info'] = mine_info
             account_data['device_info'] = red_zqb.get('devices')
             account_data['income'] = get_balance_info(cookies)
+            
             account_data['produce_info'] = get_produce_stat(cookies)
 
             if is_api_error(account_data.get('income')):
@@ -128,8 +133,6 @@ def save_history(username):
     today_data['pdc_detail'] = []
     today_data['produce_stat'] = [] 
     today_data['award_income'] = 0
-    today_data['w_award_income'] = 0
-    today_data['m_award_income'] = 0
 
     for user_id in r_session.smembers('accounts:%s' % username):
         # 获取账号所有数据
@@ -151,9 +154,11 @@ def save_history(username):
         today_data['balance'] += data.get('income').get('r_can_use')
         today_data['income'] += data.get('income').get('r_h_a')
         today_data.get('produce_stat').append(dict(mid=data.get('privilege').get('mid'), hourly_list=data.get('produce_info').get('hourly_list')))
-        today_data['award_income'] += getaward_crystal_income(username, user_id.decode('utf-8'),0)
-        today_data['w_award_income'] += getaward_crystal_income(username, user_id.decode('utf-8'),1)
-        today_data['m_award_income'] += getaward_crystal_income(username, user_id.decode('utf-8'),2)
+        if 'ioi' in data.keys():
+            for ioi in data['ioi']:
+                if 'cn' in ioi.keys() and 'ct' in ioi.keys() and time.localtime(ioi['ct']).tm_mday == datetime.now().day:
+                    if ioi['cn'].find('宝箱') != -1 or ioi['cn'].find('转盘') != -1:
+                        today_data['award_income'] += ioi['c']
         today_data['pdc'] += today_data['award_income'] 
         for device in data.get('device_info'):
             today_data['last_speed'] += int(int(device.get('dcdn_upload_speed')) / 1024)
@@ -327,12 +332,15 @@ def select_auto_task_user():
 def check_report(user, cookies, user_info):
     from mailsand import send_email
     from mailsand import validateEmail
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'check_report')
     extra_info_key='extra_info:%s' % (user_info.get('username'))
     b_extra_info=r_session.get(extra_info_key)
     if b_extra_info is None:
         extra_info={}
     else:
         extra_info=json.loads(b_extra_info.decode('utf-8'))
+    if 'last_adjust_date' not in extra_info.keys() or datetime.strptime(extra_info['last_adjust_date'],'%Y-%m-%d %H:%M:%S').day != datetime.now().day:
+        return
     if 'last_report_date' not in extra_info.keys():
         extra_info['last_report_date'] = '1997-1-1 1:1:1'
     if datetime.strptime(extra_info['last_report_date'],'%Y-%m-%d %H:%M:%S').day == datetime.now().day: return
@@ -437,61 +445,54 @@ def detect_exception(user, cookies, user_info):
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'detect_exception')
     config_key = '%s:%s' % ('user', 'system')
     config_info = json.loads(r_session.get(config_key).decode('utf-8'))
-    account_data_key = 'account:%s:%s:data' % (user_info.get('username'), user.get('userid'))
-    user_key = '%s:%s' % ('user', user_info.get('username'))
-    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+    account_data_key = 'account:%s:%s:data' % (user_info.get('username'), user.get('userid'))        
     exist_account_data = r_session.get(account_data_key)
     if exist_account_data is None: return
     account_data = json.loads(exist_account_data.decode('utf-8'))
-    if not 'device_info' in account_data.keys(): return
-    need_clear=True
-    exception_occured=False
-    last_exception_key='last_exception:%s' % user.get('userid')
-    if 'detect_info' not in user_info.keys():
+
+    extra_info_key='extra_info:%s' % (user_info.get('username'))
+    b_extra_info=r_session.get(extra_info_key)
+    if b_extra_info is None:
+        extra_info={}
+    else:
+        extra_info=json.loads(b_extra_info.decode('utf-8'))
+    if 'detect_info' not in extra_info.keys():
         detect_info={}
     else:
-        detect_info=user_info['detect_info']
+        detect_info=extra_info['detect_info']
+    if not 'device_info' in account_data.keys(): return
+    status_cn={'offline':'离线','online':'在线','exception':'异常'}
     for dev in account_data['device_info']:
-        if dev['status'] != 'online':
-            status_cn={'offline':'离线','online':'在线','exception':'异常'}
-            if last_exception_key in detect_info.keys():
-                last_time=datetime.strptime(detect_info[last_exception_key],'%Y-%m-%d %H:%M:%S')
-                if (datetime.now() - last_time).seconds > 30:
-                    if 'last_warn' not in detect_info.keys() or (datetime.now() - datetime.strptime(detect_info['last_warn'],'%Y-%m-%d %H:%M:%S')).seconds > 60*60:
-                        if 'warn_reset' not in detect_info.keys() or detect_info['warn_reset']:
-                            if validateEmail(user_info['mail_address']) == 1:
-                                mail = dict()
-                                mail['to'] = user_info['mail_address']
-                                mail['subject'] = '云监工-矿机异常'
-                                mail['text'] = ''.join(['您的矿机：',dev['device_name'],'<br />状态：',status_cn[dev['status']] ,'<br />时间：',datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
-                                send_email(mail,config_info)
-                                detect_info['warn_reset']=False
-                                detect_info['last_warn']=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                red_log(user, '矿机异常', '状态', '%s:%s -> %s' % (dev['device_name'],'在线',status_cn[dev['status']]))
-                exception_occured=True
-            need_clear=False
-        elif last_exception_key in detect_info.keys() and dev['status'] == 'online':
-            red_log(user, '矿机恢复', '状态', '%s:  当前状态:%s' % (dev['device_name'],'在线'))
-        if exception_occured:
-            detect_info[last_exception_key]=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if 'status_list' not in detect_info.keys():
+            detect_info['status_list']={}
+        if dev['device_name'] not in detect_info['status_list'].keys():
+            detect_info['status_list'][dev['device_name']]=dev['status']
+        elif dev['status'] != detect_info['status_list'][dev['device_name']]:
+            red_log(user, '矿机状态', '状态', '%s:%s -> %s' % (dev['device_name'],detect_info['status_list'][dev['device_name']],status_cn[dev['status']]))
+            if 'updated_time' in detect_info.keys() and account_data['updated_time'] != detect_info['updated_time']:
+                if 'last_warn' not in detect_info.keys() or (datetime.now() - datetime.strptime(detect_info['last_warn'],'%Y-%m-%d %H:%M:%S')).seconds > 60*60:
+                    if validateEmail(user_info['mail_address']) == 1:
+                        mail = dict()
+                        mail['to'] = user_info['mail_address']
+                        mail['subject'] = '云监工-矿机异常'
+                        mail['text'] = ''.join(['您的矿机：',dev['device_name'],'<br />状态：',status_cn[dev['status']] ,'<br />时间：',datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+                        send_email(mail,config_info)
+                        detect_info['last_warn']=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            detect_info['updated_time'] = account_data['updated_time']
         if 'dcdn_clients' in dev.keys():
             for i,client in enumerate(dev['dcdn_clients']):
                 space_last_key='space_%s:%s:%s' % (i,user.get('userid'),dev['device_name'])
                 if space_last_key in detect_info.keys():
                     last_space=detect_info[space_last_key]
                     if last_space - 100*1024*1024 > int(client['space_used']):
-                        red_log(user, '缓存变动', '状态', '删除了:%.2fGB' % (float(last_space)/1024/1024/1024-float(client['space_used'])/1024/1024/1024))
+                        red_log(user, '缓存变动', '状态', '%s:删除了%.2fGB缓存,当前%.2fGB' % (dev['device_name'],float(last_space)/1024/1024/1024-float(client['space_used'])/1024/1024/1024,float(client['space_used'])/1024/1024/1024))
                         detect_info[space_last_key] = int(client['space_used'])
                     elif last_space < int(client['space_used']):
                         detect_info[space_last_key] = int(client['space_used'])
                 else:
                    detect_info[space_last_key] = int(client['space_used'])
-    if need_clear == True:
-        detect_info['warn_reset']=True
-        detect_info.pop(last_exception_key,'^.^')
-    user_info['detect_info']=detect_info
-    r_session.set(user_key, json.dumps(user_info))
+    extra_info['detect_info']=detect_info
+    r_session.set(extra_info_key, json.dumps(extra_info))
 
 
 # 执行收取水晶函数
@@ -592,48 +593,6 @@ def check_revenge(user, cookies, user_info):
                     api_steal_summary(cookies=cookies, searcht_id=steal_info.get('sid'))
             red_log(user, '自动执行', '复仇', log)
     time.sleep(3)
-# check award income
-def check_award_income(gets):
-    if -1 == gets.find('水晶'):
-        return 0
-    income=int(''.join(filter(lambda ch: ch in '0123456789', gets)))
-    return income
-
-# get award income from log
-def getaward_crystal_income(username, user_id, weekly):
-    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'getaward_crystal_income')
-    award_income = 0
-    str_today = datetime.now().strftime('%Y-%m-%d')
-    key = '%s:%s' % ('record', username)
-    b_user_data = r_session.get(key)
-    if b_user_data is not None:
-        user_data = json.loads(b_user_data.decode('utf-8'))
-    else:
-        return award_income
-    if user_data.get('diary') is not None:
-        user_log = user_data.get('diary')
-    else:
-        return award_income
-    for item in user_log:
-        now = datetime.now()
-        log_time = datetime.strptime(item.get('time'), '%Y-%m-%d %H:%M:%S')
-        if weekly == 0:
-            if log_time.day == now.day and user_id == item.get('id') and item.get('gets').find('开启') != -1 and '宝箱' == item.get('type'):
-                award_income += check_award_income(item.get('gets'))
-            elif log_time.day == now.day and user_id == item.get('id') and item.get('gets').find('水晶') != -1 and '转盘' == item.get('type'):
-                award_income += check_award_income(item.get('gets'))
-        elif weekly == 1:
-            if log_time.isocalendar()[0] == now.isocalendar()[0] and log_time.isocalendar()[1] == now.isocalendar()[1] and user_id == item.get('id') and item.get('gets').find('开启') != -1 and '宝箱' == item.get('type'):
-                award_income += check_award_income(item.get('gets'))
-            elif log_time.isocalendar()[0] == now.isocalendar()[0] and log_time.isocalendar()[1] == now.isocalendar()[1] and user_id == item.get('id') and item.get('gets').find('水晶') != -1 and '转盘' == item.get('type'):
-                award_income += check_award_income(item.get('gets'))
-        else:
-            if log_time.month == now.month and user_id == item.get('id') and item.get('gets').find('开启') != -1 and '宝箱' == item.get('type'):
-                award_income += check_award_income(item.get('gets'))
-            elif log_time.month == now.month and user_id == item.get('id') and item.get('gets').find('水晶') != -1 and '转盘' == item.get('type'):
-                award_income += check_award_income(item.get('gets'))
-    time.sleep(3)
-    return award_income
 
 # 执行幸运转盘函数
 def check_getaward(user, cookies, user_info):
@@ -709,14 +668,8 @@ def auto_detect():
 
 # 自动报告
 def auto_report():
-    while True:
-        tomorrow = datetime.strptime(str(datetime.now().date() + timedelta(days=1)),'%Y-%m-%d')
-#避开凌晨0-1点的区间，以免发送未修正的统计数据
-        t = (tomorrow-datetime.now()).seconds + 3600
-        print('auto_report:sleep for:', t)
-        time.sleep(t)
-        cookies_auto(check_report, 'global:auto.report.cookies')
-
+    print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'auto_report')
+    cookies_auto(check_report, 'global:auto.report.cookies')
 
 # 处理函数[重组]
 def cookies_auto(func, cookiename):
@@ -820,8 +773,8 @@ if __name__ == '__main__':
     # 每240分钟检测一次幸运转盘
     threading.Thread(target=timer, args=(getaward_crystal, config_info['getaward_crystal_interval'])).start()
     # 执行自动报告
-    # 等待凌晨0点到来
-    threading.Thread(target=auto_report).start()
+    # 每30分钟检测一次自动报告，如果今天已报告过，则不执行操作
+    threading.Thread(target=timer, args=(auto_report, 30*60)).start()
     # 执行自动监测时间，单位为秒，默认为300秒。
     # 每5分钟检测一次矿机状态
     threading.Thread(target=timer, args=(auto_detect, config_info['auto_detect_interval'])).start()
