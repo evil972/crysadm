@@ -17,6 +17,8 @@ def __get_yesterday_pdc(username):
 
     yesterday_m_pdc = 0
     yesterday_w_pdc = 0
+    yesterday_m_award_income = 0
+    yesterday_w_award_income = 0
 
     while begin_date < today.date():
         begin_date = begin_date + timedelta(days=1)
@@ -30,10 +32,14 @@ def __get_yesterday_pdc(username):
         history_data = json.loads(b_data.decode('utf-8'))
         if begin_date >= month_start_date and begin_date < today.date():
             yesterday_m_pdc += history_data.get('pdc')
+            if 'award_income' in history_data.keys():
+                yesterday_m_award_income += history_data.get('award_income')
         if begin_date >= week_start_date and begin_date < today.date():
             yesterday_w_pdc += history_data.get('pdc')
+            if 'award_income' in history_data.keys():
+                yesterday_w_award_income += history_data.get('award_income')
 
-    return yesterday_m_pdc, yesterday_w_pdc
+    return yesterday_m_pdc, yesterday_w_pdc, yesterday_m_award_income, yesterday_w_award_income
 
 # 显示控制面板
 @app.route('/dashboard')
@@ -77,17 +83,22 @@ def dashboard_data():
         return Response(json.dumps(dict(today_data=empty_data)), mimetype='application/json')
     today_data = json.loads(b_data.decode('utf-8'))
     need_save = False
-    if today_data.get('yesterday_m_pdc') is None or today_data.get('yesterday_w_pdc') is None:
-        yesterday_m_pdc, yesterday_w_pdc = __get_yesterday_pdc(username)
+    if today_data.get('yesterday_m_pdc') is None or today_data.get('yesterday_w_pdc') is None or today_data.get('yesterday_w_award_income') is None or today_data.get('yesterday_m_award_income') is None:
+        yesterday_m_pdc, yesterday_w_pdc, yesterday_m_award_income, yesterday_w_award_income = __get_yesterday_pdc(username)
         today_data['yesterday_m_pdc'] = yesterday_m_pdc
         today_data['yesterday_w_pdc'] = yesterday_w_pdc
+        today_data['yesterday_m_award_income'] = yesterday_m_award_income
+        today_data['yesterday_w_award_income'] = yesterday_w_award_income
         need_save = True
 
     today_data['m_pdc'] = today_data.get('yesterday_m_pdc') + today_data.get('pdc')
     today_data['w_pdc'] = today_data.get('yesterday_w_pdc') + today_data.get('pdc')
+    today_data['m_award_income'] = today_data.get('yesterday_m_award_income') + today_data.get('award_income')
+    today_data['w_award_income'] = today_data.get('yesterday_w_award_income') + today_data.get('award_income')
 
     if need_save:
         r_session.set(key, json.dumps(today_data))
+    today_data['pdc'] -= today_data.get('award_income')
     if user_info.get('is_show_wpdc') is None or user_info.get('is_show_wpdc') == 0:
         today_data['w_award_income'] = today_data.get('award_income')
     elif user_info.get('is_show_wpdc') == 2:
@@ -326,23 +337,24 @@ def DoD_income_xunlei():
     else:
         yesterday_data = json.loads(b_yesterday_data_new.decode('utf-8'))
         yesterday_series['data'] = []
-        # 产量柱子开始
-        for i in range(1, 25): 
-            if yesterday_data.get('produce_stat')[0].get('hourly_list') is None:
-                break
-            temp = 0
-            for hourly_produce in yesterday_data.get('produce_stat'):
-                temp += hourly_produce.get('hourly_list')[i]
-            yesterday_series['data'].append(temp)
-        # 产量柱子结束
-            yesterday_speed_data = yesterday_data.get('speed_stat')
-        # 速度曲线开始
-        for i in range(0, 24):
-            if yesterday_speed_data is not None:
-                yesterday_speed_series['data'].append(sum(row.get('dev_speed')[i] for row in yesterday_speed_data))
-            else:
-                yesterday_speed_series['data'] = []
-        # 速度曲线结束
+        if 'produce_stat' in yesterday_data.keys() and len(yesterday_data['produce_stat'])!=0:
+            # 产量柱子开始
+            for i in range(1, 25): 
+                if yesterday_data.get('produce_stat')[0].get('hourly_list') is None:
+                    break
+                temp = 0
+                for hourly_produce in yesterday_data.get('produce_stat'):
+                    temp += hourly_produce.get('hourly_list')[i]
+                yesterday_series['data'].append(temp)
+            # 产量柱子结束
+                yesterday_speed_data = yesterday_data.get('speed_stat')
+            # 速度曲线开始
+            for i in range(0, 24):
+                if yesterday_speed_data is not None:
+                    yesterday_speed_series['data'].append(sum(row.get('dev_speed')[i] for row in yesterday_speed_data))
+                else:
+                    yesterday_speed_series['data'] = []
+            # 速度曲线结束
 
     now_income_value = sum(today_series['data'][0:now.hour])
     dod_income_value = sum(yesterday_series['data'][0:now.hour])

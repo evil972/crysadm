@@ -135,12 +135,16 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
     
-type_dict = {'0':'','1':'收取','2':'宝箱','3':'转盘','4':'进攻','5':'复仇','6':'提现','7':'状态'}
-@app.route('/log/<sel_type>')
+@app.route('/log')
 @requires_auth
-def user_log(sel_type):
+def user_log():
+    type_dict = {'0':'','1':'收取','2':'宝箱','3':'转盘','4':'进攻','5':'复仇','6':'提现','7':'状态'}
     log_as = []
     user = session.get('user_info')
+    if request.args.get('time') is not None:
+        session['log_sel_time']=request.args.get('time')
+    if request.args.get('type') is not None:
+        session['log_sel_type']=request.args.get('type')
 
     record_key = '%s:%s' % ('record', user.get('username'))
     record_info = json.loads(r_session.get(record_key).decode('utf-8'))
@@ -150,6 +154,7 @@ def user_log(sel_type):
 
     accounts_key = 'accounts:%s' % user.get('username')
     id_map = {}
+
     for acct in sorted(r_session.smembers(accounts_key)):
         account_key = 'account:%s:%s' % (user.get('username'), acct.decode("utf-8"))
         account_info = json.loads(r_session.get(account_key).decode("utf-8"))
@@ -159,20 +164,91 @@ def user_log(sel_type):
             id_map[account_info.get('user_id')]=account_info.get('account_name')
     for row in record_info.get('diary'):
         row['id']=id_map.get(row['id'])
-        if '1day' == request.args.get('time'):
-            if (datetime.now() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S')).days < 1:
-                if row.get('type').find(str(type_dict.get(sel_type)))!=-1:
+        if '1day' == session.get('log_sel_time'):
+            if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days < 1:
+                if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1:
                     log_as.append(row)
-        elif 'all' == request.args.get('time'):
-            if row.get('type').find(str(type_dict.get(sel_type)))!=-1: log_as.append(row)
+        elif '3day' == session.get('log_sel_time'):
+            if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days < 3:
+                if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1: log_as.append(row)
+        elif 'important' == session.get('log_sel_time'):
+            if row.get('type') == '收取':
+                log_as.append(row)
+            elif row.get('type') == '宝箱':
+                if row.get('gets').find('开启') != -1:
+                    log_as.append(row)
+            elif row.get('type') == '转盘':
+                if row.get('gets').find('水晶') != -1:
+                    log_as.append(row)
+            elif row.get('type') == '提现':
+                if row.get('gets').find('成功') != -1:
+                    log_as.append(row)
+                elif row.get('gets').find('风控') != -1:
+                    log_as.append(row)
+            elif row.get('type') == '状态':
+                if row.get('gets').find('在线') != -1:
+                    log_as.append(row)
+        elif 'all' == session.get('log_sel_time'):
+            if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1: log_as.append(row)
         else:
-            if (datetime.now() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S')).days < 7:
-                if row.get('type').find(str(type_dict.get(sel_type)))!=-1: log_as.append(row)
+            if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days < 7:
+                if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1: log_as.append(row)
 
 
     log_as.reverse()
 
     return render_template('log.html', log_user=log_as)
+
+
+@app.route('/log/delete_sel')
+@requires_auth
+def user_log_delete_sel():
+    user = session.get('user_info')
+
+    record_key = '%s:%s' % ('record', user.get('username'))
+    record_info = json.loads(r_session.get(record_key).decode('utf-8'))
+
+    diary = []
+
+    for row in record_info.get('diary'):
+        if '1day' == session.get('log_sel_time'):
+            if (datetime.now() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S')).days >= 1:
+                diary.append(row)
+            else:
+                if row.get('type').find(str(type_dict.get(session.get('log_sel_type')))) == -1:
+                    diary.append(row)
+        elif '3day' == session.get('log_sel_time'):
+            if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days >= 3:
+                diary.append(row)
+            else:
+                if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1:
+                    diary.append(row)
+        elif 'all' == session.get('log_sel_time'):
+            if row.get('type').find(str(type_dict.get(session.get('log_sel_type')))) == -1: diary.append(row)
+        elif 'important' == session.get('log_sel_time'):
+            if row.get('type') == '宝箱':
+                if row.get('gets').find('开启') == -1:
+                    log_as.append(row)
+            elif row.get('type') == '转盘':
+                if row.get('gets').find('水晶') == -1:
+                    log_as.append(row)
+            elif row.get('type') == '提现':
+                if row.get('gets').find('成功') == -1 and row.get('gets').find('风控') == -1:
+                    log_as.append(row)
+            elif row.get('type') == '状态':
+                if row.get('gets').find('在线') == -1:
+                    log_as.append(row)
+        else:
+            if (datetime.now() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S')).days >= 7:
+                diary.append(row)
+            else:
+                if row.get('type').find(str(type_dict.get(session.get('log_sel_type')))) == -1: diary.append(row)
+
+    record_info['diary'] = diary
+
+    r_session.set(record_key, json.dumps(record_info))
+
+    return redirect('/log')
 
 
 @app.route('/log/delete')
@@ -187,7 +263,7 @@ def user_log_delete():
 
     r_session.set(record_key, json.dumps(record_info))
 
-    return redirect('/log/0')
+    return redirect('/log')
 
 
 def guest_diary(request, username):
@@ -332,8 +408,6 @@ def user_change_property(field, value):
         user_info['is_show_wpdc'] = int(value)
     if field == 'is_show_byname':
         user_info['is_show_byname'] = True if value == '1' else False
-    if field == 'mail_address':
-        user_info['mail_address'] = request.values.get('mail_address')
     if field == 'auto_detect':
         user_info['auto_detect'] = True if value == '1' else False
         session['action'] = 'profile'
@@ -473,7 +547,7 @@ def user_email(email, key):
 
 @app.route('/user/register', methods=['POST'])
 def user_register():
-    email = request.values.get('email')
+    email = request.values.get('username')
     invitation_code = request.values.get('invitation_code')
     username = request.values.get('username')
     password = request.values.get('password')
@@ -516,9 +590,6 @@ def user_register():
             session['error_message'] = '发送邮件过于频繁 请稍候再试.'
             return redirect(url_for('register'))
 
-    r_session.srem('invitation_codes', invitation_code)
-    r_session.srem('public_invitation_codes', invitation_code)
-
     _chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     key = ''.join(random.sample(_chars, 36))
     user = dict(username=username, password=hash_password(password), id=str(uuid.uuid1()),
@@ -534,6 +605,9 @@ def user_register():
     if user_email(email, encodestr.decode('utf-8')) != True:
         session['error_message'] = '激活帐户邮件发送失败 邮箱不存在.'
         return redirect(url_for('register'))
+
+    r_session.srem('invitation_codes', invitation_code)
+    r_session.srem('public_invitation_codes', invitation_code)
 
     session['info_message'] = '激活帐户邮件已发送到您的邮箱.'
     return redirect(url_for('register'))

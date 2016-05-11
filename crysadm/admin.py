@@ -239,8 +239,19 @@ def none_user():
 
     return json.dumps(dict(none_xlAcct=none_xlAcct, none_active_xlAcct=none_active_xlAcct))
 
+# 系统管理 -> 用户管理 -> 删除无矿机的用户
+@app.route('/admin/clear_no_device_user', methods=['POST'])
+@requires_admin
+def admin_clear_no_device_user():
+    for b_user in r_session.smembers('users'):
+        username = b_user.decode('utf-8')
+        accounts_count = r_session.smembers('accounts:%s' % username)
+        if accounts_count is None or len(accounts_count) == 0:
+             admin_del_user(username)
+        return redirect(url_for('admin_user'))
+
 # 系统管理 => 用户管理 => 删除无用户？
-@app.route('/del_none_user')
+@app.route('/del_none_user', methods=['POST'])
 @requires_admin
 def del_none_user():
     none_active_xlAcct = list()
@@ -258,8 +269,8 @@ def del_none_user():
                 break
         if not has_active_account:
             none_active_xlAcct.append(username)
-
-    return json.dumps(dict(none_active_xlAcct=none_active_xlAcct))
+            admin_del_user(username)
+    return redirect(url_for('admin_user'))
 
 # 系统管理 => 通知管理 => 发送通知
 @app.route('/admin/message/send', methods=['POST'])
@@ -305,11 +316,11 @@ def test_email():
     user_info = json.loads(r_session.get(user_key).decode('utf-8'))
 
     session['action'] = 'info'
-    if 'mail_address' not in user_info.keys() or not validateEmail(user_info["mail_address"]):
+    if 'email' not in user_info.keys() or not validateEmail(user_info["email"]):
        session['error_message']='该账户的提醒邮件地址设置不正确，无法测试'
        return redirect(url_for('system_config'))
     mail = dict()
-    mail['to'] = user_info['mail_address']
+    mail['to'] = user_info['email']
     mail['subject'] = '云监工-测试邮件'
     mail['text'] = '这只是一个测试邮件，你更应该关注的不是这里面写了什么。不是么？'
     send_email(mail,config_info)
@@ -409,5 +420,5 @@ def guest_invitation_delete():
 @requires_admin
 def admin_about():
     import platform
-    version = '当前版本：2016-05-01'
+    version = '当前版本：2016-05-10'
     return render_template('about.html', platform=platform, version=version)

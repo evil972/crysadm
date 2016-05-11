@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 import time
 from datetime import datetime
 import re
-from api import ubus_cd, collect, exec_draw_cash, api_sys_getEntry, api_steal_search, api_steal_collect, api_steal_summary, api_getaward
+from api import ubus_cd, collect, exec_draw_cash, api_sys_getEntry, api_steal_search, api_steal_collect, api_steal_summary, api_getaward, get_mine_info
 
 # 加载矿机主页面
 @app.route('/excavators')
@@ -84,14 +84,17 @@ def collect_id(user_id):
     user_id = account_info.get('user_id')
 
     cookies = dict(sessionid=session_id, userid=str(user_id))
+
+    mine_info = get_mine_info(cookies)
     r = collect(cookies)
     if r.get('rd') != 'ok':
-        session['error_message'] = r.get('rd')
-        red_log('手动执行', '收取', user_id, r.get('rd'))
+        log = '%s' % r.get('rd')
+        session['error_message'] = log
         return redirect(url_for('excavators'))
     else:
-        session['info_message'] = '收取水晶成功.'
-        red_log('手动执行', '收取', user_id, '收取水晶成功.')
+        log = '收取:%s水晶.' % mine_info.get('td_not_in_a')
+        session['info_message'] = log
+    red_log('手动执行', '收取', user_id, log)
     account_data_key = account_key + ':data'
     account_data_value = json.loads(r_session.get(account_data_key).decode("utf-8"))
     account_data_value.get('mine_info')['td_not_in_a'] = 0
@@ -117,17 +120,20 @@ def collect_all():
         user_id = account_info.get('user_id')
 
         cookies = dict(sessionid=session_id, userid=str(user_id))
+        mine_info = get_mine_info(cookies)
+        time.sleep(1)
         r = collect(cookies)
         if r.get('rd') != 'ok':
+            log = '%s' % r.get('rd')
             error_message += 'Id:%s : %s<br />' % (user_id, r.get('rd'))
-            red_log('手动执行', '收取', user_id, r.get('rd'))
         else:
-            success_message += 'Id:%s : 收取水晶成功.<br />' % user_id
-            red_log('手动执行', '收取', user_id, '收取水晶成功.')
+            log = '收取:%s水晶.' % mine_info.get('td_not_in_a')
+            success_message += 'Id:%s : 收取:%s水晶.<br />' % (user_id,mine_info.get('td_not_in_a'))
             account_data_key = account_key + ':data'
             account_data_value = json.loads(r_session.get(account_data_key).decode("utf-8"))
             account_data_value.get('mine_info')['td_not_in_a'] = 0
             r_session.set(account_data_key, json.dumps(account_data_value))
+        red_log('手动执行', '收取', user_id, log)
 
     if len(success_message) > 0:
         session['info_message'] = success_message
