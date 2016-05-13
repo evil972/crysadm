@@ -159,6 +159,22 @@
                                     </span>
                                 </div>
                             </form>
+                            <form role="form" action="/admin/change_property/master_mail_usetls/{% if user_info.master_mail_usetls %}0{% else %}1{% endif %}/system" method="post">
+                                <div class="form-group input-group">
+                                     <span class="input-group-addon"><i style="width: 16px;" class="fa fa-trello"></i>
+                                                </span>
+                                    <input class="form-control" value="{% if user_info.master_mail_usetls %}O -（当前使用TLS安全连接，将使用TLS加密发送邮件）{% else %}X - （当前不使用TLS安全连接，将使用明文发送邮件）{% endif %}" disabled>
+                                    
+                                        <span class="input-group-btn" style="padding-top: 0px;padding-bottom: 0px;">
+                                        {% if user_info.master_mail_usetls  %}
+                                            <button type="submit" class="btn btn-danger" style="text-align:left; width: 140px;">禁用安全连接</button>
+                                        {% else %}
+                                            <button type="submit" class="btn btn-success" style="text-align:left; width: 140px;">使用安全连接</button>
+                                        {% endif %}
+                                        </span>
+                                    
+                                </div>
+                            </form>
                             <form role="form" action="/admin/test_email" method="post">
                                 <div class="form-group input-group">
                                      <span class="input-group-addon"><i style="width: 16px;" class="fa fa-wrench"></i></span>

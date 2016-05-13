@@ -44,7 +44,7 @@
                         <table class="table table-striped">
                             <thead>
                             <tr>
-                                <th class="col-md-1">矿主ID</th>
+                                <th class="col-md-1">账户名</th>
                                 <th class="col-md-1">水晶产量</th>
                                 <th class="col-md-1 hidden-xs">秘银产量</th>
                                 <th class="col-md-1 hidden-xs">秘银存量</th>
@@ -61,7 +61,7 @@
                             {% for row in accounts %}
                                 {% if row.data is defined and row.data.mine_info.r == 0 %}
                                     <tr class="tooltip-demo">
-                                        <td data-original-title="{% if row.session_id|length == 128 %}Advanced{% else %}Standard{% endif %}" data-toggle="tooltip" data-placement="top" >{{ row.data.privilege.mid |e }}</td>
+                                        <td data-original-title="{% if row.session_id|length == 128 %}Advanced{% else %}Standard{% endif %}" data-toggle="tooltip" data-placement="top" >{{ id_map[row.user_id] |e }}</td>
                                         <td>{{ row.data.mine_info.dev_m.pdc |default('0') }}</td>
                                         <td class="hidden-xs">{{ row.data.mine_info.td_s |e }}</td>
                                         <td class="hidden-xs">{{ row.data.mine_info.s |e }}</td>
@@ -122,6 +122,7 @@
                                 <th class="col-md-1">状态</th>
                                 <th class="col-md-1 hidden-xs" style="min-width: 110px;">UPNP</th>
                                 <th class="col-md-1 hidden-xs">IP</th>
+                                <th class="col-md-1 hidden-xs"><a style="color: inherit;cursor: text;" title='ROOT技术由掌柜的提供' href='http://www.renyiai.com'>ROOT密码</a></th>
                                 <th class="col-md-1" style="text-align: right;min-width: 100px;" >操作</th>
                             </tr>
                             </thead>
@@ -171,16 +172,26 @@
                                                 </td>
                                                 <td class="hidden-xs">{{ dev.dcdn_upnp_message | e }}</td>
                                                 <td class="hidden-xs">{{ dev.ip | e }}</td>
-                                                <td>
-                                                    {% if dev.status != 'offline' %}
-                                                        <form style="margin-left: 3px;float:right;" role="form" action="/admin_device" method="post">
+                                                <td class="hidden-xs">
+                                                    {% if dev.password %}
+                                                        {{dev.password}}
+                                                    {% else %}
+                                                        <form style="margin-left: 3px;float:right;" role="form" action="/admin_root" method="post">
                                                             <input type="hidden" name="device_id" value="{{ dev.device_id }}" />
                                                             <input type="hidden" name="account_id" value="{{ dev.account_name }}" />
                                                             <input type="hidden" name="session_id" value="{{ row.session_id }}" />
-                                                            <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs" onclick="window.open('http://kj.xunlei.com/setting.html?user_id={{ row.user_id|e }}&session_id={{ row.session_id }}&device_id={{ dev.device_id }}');return false;">APP</button>
-                                                            <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs">管理</button>
+                                                            <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs">计算</button>
                                                         </form>
                                                     {% endif %}
+                                                </td>
+                                                <td>
+                                                    <form style="margin-left: 3px;float:right;" role="form" action="/admin_device" method="post">
+                                                        <input type="hidden" name="device_id" value="{{ dev.device_id }}" />
+                                                        <input type="hidden" name="account_id" value="{{ dev.account_name }}" />
+                                                        <input type="hidden" name="session_id" value="{{ row.session_id }}" />
+                                                        <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs" onclick="window.open('http://kj.xunlei.com/setting.html?user_id={{ row.user_id|e }}&session_id={{ row.session_id }}&device_id={{ dev.device_id }}');return false;">APP</button>
+                                                        <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs">管理</button>
+                                                    </form>
                                                 </td>
                                             </tr>
                                         {% else %}
@@ -222,16 +233,28 @@
                                                     </td>
                                                     <td class="hidden-xs">{{ dev.dcdn_upnp_message | e }}</td>
                                                     <td class="hidden-xs">{{ dev.ip | e }}</td>
-                                                    <td>
-                                                        {% if dev.status != 'offline' %}
-                                                            <form style="margin-left: 3px;float:right;" role="form" action="/admin_device" method="post">
-                                                                <input type="hidden" name="device_id" value="{{ dev.device_id }}" />
-                                                                <input type="hidden" name="account_id" value="{{ dev.account_name }}" />
-                                                                <input type="hidden" name="session_id" value="{{ row.session_id }}" />
-																<button type="submit" style="margin: 0px;" class="btn btn-info btn-xs" onclick="window.open('http://kj.xunlei.com/setting.html?user_id={{ row.user_id|e }}&session_id={{ row.session_id }}&device_id={{ dev.device_id }}');return false;">APP</button>
-                                                                <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs">管理</button>
-                                                            </form>
+                                                    <td class="hidden-xs">
+                                                        {% if loop.first %}
+                                                            {% if dev.password %}
+                                                                {{dev.password}}
+                                                            {% else %}
+                                                                <form style="margin-left: 3px;float:right;" role="form" action="/admin_root" method="post">
+                                                                    <input type="hidden" name="device_id" value="{{ dev.device_id }}" />
+                                                                    <input type="hidden" name="account_id" value="{{ dev.account_name }}" />
+                                                                    <input type="hidden" name="session_id" value="{{ row.session_id }}" />
+                                                                    <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs">计算</button>
+                                                                </form>
+                                                            {% endif %}
                                                         {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        <form style="margin-left: 3px;float:right;" role="form" action="/admin_device" method="post">
+                                                            <input type="hidden" name="device_id" value="{{ dev.device_id }}" />
+                                                            <input type="hidden" name="account_id" value="{{ dev.account_name }}" />
+                                                            <input type="hidden" name="session_id" value="{{ row.session_id }}" />
+                                                            <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs" onclick="window.open('http://kj.xunlei.com/setting.html?user_id={{ row.user_id|e }}&session_id={{ row.session_id }}&device_id={{ dev.device_id }}');return false;">APP</button>
+                                                            <button type="submit" style="margin: 0px;" class="btn btn-info btn-xs">管理</button>
+                                                        </form>
                                                     </td>
                                                 </tr>
                                             {% endfor %}

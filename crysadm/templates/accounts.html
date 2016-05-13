@@ -39,7 +39,7 @@
                                     <div class="col-lg-12">
                                         <div class="alert alert-danger alert-dismissable">
                                             <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
-                                            {{ error_message }}
+                                            {{ error_message|safe }}
                                         </div>
                                     </div>
                                 {% endif %}
@@ -65,7 +65,7 @@
                                     <div class="col-lg-12">
                                         <div class="alert alert-danger alert-dismissable">
                                             <button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
-                                            {{ error_message }}
+                                            {{ error_message|safe }}
                                         </div>
                                     </div>
                                 {% endif %}
@@ -113,6 +113,7 @@
                                 <th>账号</th>
                                 <th>用户名</th>
                                 <th>ID</th>
+                                <th>备注名</th>
                                 <th>启用</th>
                                 <th>状态</th>
                                 <th>添加时间</th>
@@ -127,6 +128,12 @@
                                     <td>{{ row.account_name|e }}</td>
                                     <td>{{ row.username|e }}</td>
                                     <td>{{ row.user_id|e }}</td>
+                                    <td>
+                                        <form id="form_{{ row.user_id }}" role="form" action="/account/set_remark_name" method="post">
+                                            <input type="hidden" name="user_id" value="{{ row.user_id }}" />
+                                            <input placeholder="备注名" name="remark_name" autocomplete="off" type="text" value='{{ row.remark_name }}' onchange="submitRemarkName($('#form_{{ row.user_id }}'));">
+                                        </form>
+                                    </td>
                                     <td>
                                         {% if row.active  %}
                                             O
@@ -168,6 +175,19 @@
     </div>
     <!-- /.row -->
 
+{% endblock %}
+{% block js_logic %}
+    <script>
+        function submitRemarkName(form)
+        {
+            form.ajaxSubmit({
+                type: 'post',
+                error: function(data) {
+                    //alert('请求出错：'+data);
+                }
+            });
+        }
+    </script>
 {% endblock %}
 
 {% block navibar %}
