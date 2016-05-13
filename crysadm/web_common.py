@@ -112,22 +112,37 @@ def dashboard_speed_share():
     user = session.get('user_info')
     username = user.get('username')
     accounts_key = 'accounts:%s' % username
-
+    user_key = '%s:%s' % ('user', user.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+ 
     account_key = ['account:%s:%s:data' % (username, name.decode('utf-8')) for name in sorted(r_session.smembers(accounts_key))]
     if len(account_key) == 0:
         return Response(json.dumps(dict(data=[])), mimetype='application/json')
+    accounts_key = 'accounts:%s' % user.get('username')
+    id_map = {}
+    drilldown_data = []    
+    for acct in sorted(r_session.smembers(accounts_key)):
+        account_key = 'account:%s:%s' % (user.get('username'), acct.decode("utf-8"))
+        account_info = json.loads(r_session.get(account_key).decode("utf-8"))
+        if user_info.get('is_show_byname') == 0:
+            id_map[account_info.get('user_id')]=account_info.get('remark_name')
+        elif user_info.get('is_show_byname') == 1:
+            id_map[account_info.get('user_id')]=account_info.get('account_name')
+        else:
+            id_map[account_info.get('user_id')]=account_info.get('username')
 
-    drilldown_data = []
-    for b_acct in r_session.mget(*['account:%s:%s:data' % (username, name.decode('utf-8'))
-                                   for name in sorted(r_session.smembers(accounts_key))]):
-
-        account_info = json.loads(b_acct.decode("utf-8"))
-        mid = str(account_info.get('privilege').get('mid'))
+        account_data_key = account_key + ':data'
+        account_data_value = r_session.get(account_data_key)
+        if account_data_value is not None:
+            account_info_data=json.loads(account_data_value.decode("utf-8"))
+        else:
+            continue
+        mid = str(account_info_data.get('privilege').get('mid'))
 
         total_speed = 0
         device_speed = []
 
-        for device_info in account_info.get('device_info'):
+        for device_info in account_info_data.get('device_info'):
             if device_info.get('status') != 'online':
                 continue
             uploadspeed = int(int(device_info.get('dcdn_upload_speed')) / 1024)            
@@ -138,7 +153,7 @@ def dashboard_speed_share():
             # device_speed.append(dict(name=device_info.get('device_name'), value=total_speed))
 
         # 显示在速度分析器圆形图表上的设备ID
-        drilldown_data.append(dict(name='矿主ID:' + mid, value=total_speed, drilldown_data=device_speed))
+        drilldown_data.append(dict(name='账户名:' + id_map[account_info.get('user_id')], value=total_speed, drilldown_data=device_speed))
         #drilldown_data.append(dict(name='设备名:' + device_info.get('device_name'), value=total_speed, drilldown_data=device_speed))
 
     return Response(json.dumps(dict(data=drilldown_data)), mimetype='application/json')
@@ -187,21 +202,37 @@ def dashboard_today_income_share():
     user = session.get('user_info')
     username = user.get('username')
     accounts_key = 'accounts:%s' % username
+    user_key = '%s:%s' % ('user', user.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
 
     account_key = ['account:%s:%s:data' % (username, name.decode('utf-8')) for name in sorted(r_session.smembers(accounts_key))]
     if len(account_key) == 0:
         return Response(json.dumps(dict(data=[])), mimetype='application/json')
 
     pie_data = []
-    for b_acct in r_session.mget(*['account:%s:%s:data' % (username, name.decode('utf-8'))
-                                   for name in sorted(r_session.smembers(accounts_key))]):
-        account_info = json.loads(b_acct.decode("utf-8"))
-        mid = str(account_info.get('privilege').get('mid'))
+    id_map = {}
+    for acct in sorted(r_session.smembers(accounts_key)):
+        account_key = 'account:%s:%s' % (user.get('username'), acct.decode("utf-8"))
+        account_info = json.loads(r_session.get(account_key).decode("utf-8"))
+        if user_info.get('is_show_byname') == 0:
+            id_map[account_info.get('user_id')]=account_info.get('remark_name')
+        elif user_info.get('is_show_byname') == 1:
+            id_map[account_info.get('user_id')]=account_info.get('account_name')
+        else:
+            id_map[account_info.get('user_id')]=account_info.get('username')
+
+        account_data_key = account_key + ':data'
+        account_data_value = r_session.get(account_data_key)
+        if account_data_value is not None:
+            account_info_data=json.loads(account_data_value.decode("utf-8"))
+        else:
+            continue
+        mid = str(account_info_data.get('privilege').get('mid'))
 
         total_value = 0
-        total_value += account_info.get('mine_info').get('dev_m').get('pdc')
+        total_value += account_info_data.get('mine_info').get('dev_m').get('pdc')
 
-        pie_data.append(dict(name='矿主ID:' + mid, y=total_value))
+        pie_data.append(dict(name='账户名:' + id_map[account_info.get('user_id')], y=total_value))
 
     return Response(json.dumps(dict(data=pie_data)), mimetype='application/json')
 
@@ -233,8 +264,8 @@ def DoD_income_yuanjiangong():
 
     income_history = json.loads(b_income_history.decode('utf-8'))
 
-    today_series = dict(name='今日', data=[], pointPadding=0.2, pointPlacement=0, color='#676A6C')
-    yesterday_series = dict(name='昨日', data=[], pointPadding=-0.1, pointPlacement=0, color='#1AB394')
+    today_series = dict(name='今日', data=[], pointPadding=0.2, pointPlacement=0, color='#676A6C', yAxis = 0)
+    yesterday_series = dict(name='昨日', data=[], pointPadding=-0.1, pointPlacement=0, color='#1AB394', yAxis = 0)
 
     now = datetime.now()
     today_data = income_history.get(now.strftime('%Y-%m-%d'))
@@ -297,10 +328,10 @@ def DoD_income_xunlei():
     user = session.get('user_info')
     username = user.get('username')
 
-    today_series = dict(name='今日', data=[], pointPadding=0.2, pointPlacement=0, color='#676A6C')
-    yesterday_series = dict(name='昨日', data=[], pointPadding=-0.1, pointPlacement=0, color='#1AB394')
-    today_speed_series = dict(name='今日', data=[], type = 'spline', pointPadding=0.2, pointPlacement=0, color='#676A6C', tooltip=dict(valueSuffix=' kbps'))
-    yesterday_speed_series = dict(name='昨日', data=[], type = 'spline', pointPadding=-0.1, pointPlacement=0, color='#1AB394', tooltip=dict(valueSuffix=' kbps'))
+    today_series = dict(name='今日', data=[], pointPadding=0.2, pointPlacement=0, color='#676A6C', yAxis = 0)
+    yesterday_series = dict(name='昨日', data=[], pointPadding=-0.1, pointPlacement=0, color='#1AB394', yAxis = 0)
+    today_speed_series = dict(name='今日', data=[], type = 'spline', pointPadding=0.2, pointPlacement=0, color='#B8DD22', tooltip=dict(valueSuffix=' KB/s'), yAxis = 1)
+    yesterday_speed_series = dict(name='昨日', data=[], type = 'spline', pointPadding=-0.1, pointPlacement=0, color='#66CCFF', tooltip=dict(valueSuffix=' KB/s'), yAxis = 1)
 
     now = datetime.now()
 
@@ -324,10 +355,10 @@ def DoD_income_xunlei():
             if i + now.hour < 24:
                 continue
             if today_speed_data is not None:
-                today_speed_series['data'].append(sum(row.get('dev_speed')[i] for row in today_speed_data))
+                today_speed_series['data'].append(sum(row.get('dev_speed')[i] for row in today_speed_data) / 8)
             else:
                 today_speed_series['data'] = []
-        today_speed_series['data'].append(today_data.get('last_speed') * 8)
+        today_speed_series['data'].append(today_data.get('last_speed'))
         # 速度曲线结束
 
     key = 'user_data:%s:%s' % (username, (now + timedelta(days=-1)).strftime('%Y-%m-%d'))
@@ -351,7 +382,7 @@ def DoD_income_xunlei():
             # 速度曲线开始
             for i in range(0, 24):
                 if yesterday_speed_data is not None:
-                    yesterday_speed_series['data'].append(sum(row.get('dev_speed')[i] for row in yesterday_speed_data))
+                    yesterday_speed_series['data'].append(sum(row.get('dev_speed')[i] for row in yesterday_speed_data) / 8)
                 else:
                     yesterday_speed_series['data'] = []
             # 速度曲线结束

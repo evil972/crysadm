@@ -16,6 +16,9 @@ from api import ubus_cd, collect, exec_draw_cash, api_sys_getEntry, api_steal_se
 @requires_auth
 def excavators():
     user = session.get('user_info')
+    user_key = '%s:%s' % ('user', user.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+
     err_msg = None
     if session.get('error_message') is not None:
         err_msg = session.get('error_message')
@@ -29,6 +32,7 @@ def excavators():
     accounts_key = 'accounts:%s' % user.get('username')
     accounts = list()
 
+    id_map = {}
     for acct in sorted(r_session.smembers(accounts_key)):
         account_key = 'account:%s:%s' % (user.get('username'), acct.decode("utf-8"))
         account_data_key = account_key + ':data'
@@ -36,14 +40,23 @@ def excavators():
         account_info = json.loads(r_session.get(account_key).decode("utf-8"))
         if account_data_value is not None:
             account_info['data'] = json.loads(account_data_value.decode("utf-8"))
-
+        if 'root_passwd' in user_info.keys() and 'data' in account_info.keys() and 'device_info' in account_info['data'].keys():
+            for dev in account_info['data']['device_info']:
+                if dev['device_id'] in user_info['root_passwd'].keys():
+                    dev['password']=user_info['root_passwd'][dev['device_id']]
         accounts.append(account_info)
+        if user_info.get('is_show_byname') == 0:
+            id_map[account_info.get('user_id')]=account_info.get('remark_name')
+        elif user_info.get('is_show_byname') == 1:
+            id_map[account_info.get('user_id')]=account_info.get('account_name')
+        else:
+            id_map[account_info.get('user_id')]=account_info.get('username')
 
     show_drawcash = not (r_session.get('can_drawcash') is None or
                          r_session.get('can_drawcash').decode('utf-8') == '0')
 
     return render_template('excavators.html', err_msg=err_msg, info_msg=info_msg, accounts=accounts,
-                           show_drawcash=show_drawcash)
+                           show_drawcash=show_drawcash, id_map=id_map)
 
 # 正则过滤+URL转码
 def regular_html(info):
@@ -439,6 +452,53 @@ def set_device_name():
             ["server", "set_device_name", {"device_name": new_name, "device_id": device_id}])
 
     return json.dumps(dict(status='success'))
+
+# 计算设备ROOT密码
+# ROOT技术提供：掌柜
+# 显著位置
+# http://www.renyiai.com
+# 显著位置
+@app.route('/admin_root', methods=['POST'])
+@requires_auth
+def admin_root():
+    import hashlib
+    import base64
+    user = session.get('user_info')
+    user_key = '%s:%s' % ('user', user.get('username'))
+    user_info = json.loads(r_session.get(user_key).decode('utf-8'))
+    action = None
+    if session.get('action') is not None:
+        action = session.get('action')
+        session['action'] = None
+    if 'root_no' in user_info.keys() and user_info['root_no'] > 0:
+        device_id = request.values.get('device_id')
+        session_id = request.values.get('session_id')
+        account_id = request.values.get('account_id')
+        dev = ubus_cd(session_id, account_id, 'get_device', ["server", "get_device", {"device_id": device_id}])
+        if dev is not None:
+            if 'result' in dev.keys():
+                sn=dev['result'][1]['device_sn']
+                mac=dev['result'][1]['mac_address']
+                key='%s%s%s'%(sn,mac,'i8e%Fvj24nz024@d!c')
+                m=hashlib.md5()
+                m.update(key.encode('utf-8'))
+                md5=m.digest()
+                passwd=base64.b64encode(md5).decode('utf-8')
+                passwd=passwd[0:8]
+                passwd=passwd.replace('+','-')
+                passwd=passwd.replace('/','_')
+                if 'root_passwd' not in user_info.keys():
+                    user_info['root_passwd']={}
+                user_info['root_passwd'][device_id]=passwd
+                user_info['root_no']=user_info['root_no'] - 1
+                r_session.set(user_key, json.dumps(user_info))
+            else:
+                session['error_message']='获取ROOT所需信息失败'
+        else:
+            session['error_message']='请选择一个需要ROOT密码的设备'
+        return redirect(url_for('excavators'))
+    session['error_message']='您的账户没有ROOT机会了，请联系管理员获取。'
+    return redirect(url_for('excavators'))
 
 # 加载设备页面
 @app.route('/admin_device', methods=['POST'])

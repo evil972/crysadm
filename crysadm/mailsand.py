@@ -19,9 +19,9 @@ def send_async_email(email,config_info):
 # 发送邮件
 def send_email(email,config_info):
     SERVER = config_info['master_mail_smtp'] #邮箱smtp服务器
-    PORT = 25 #邮箱smtp端口
     USERNAME = config_info['master_mail_address'] #smtp账号
     PASSWORD = config_info['master_mail_password']#smtp授权密码
+    PORT = 25 #邮箱smtp端口
     FROM = USERNAME
     TO = email.get('to')
     SUBJECT = email.get('subject')
@@ -32,15 +32,13 @@ def send_email(email,config_info):
     msg['To'] = TO
     msg['Subject'] = Header(SUBJECT,'utf-8')
 
-    try:
-        smtp = smtplib.SMTP(SERVER, PORT)
-        smtp.ehlo()
-        smtp.starttls()
-        smtp.ehlo()
-        smtp.login(USERNAME, PASSWORD)
-        smtp.sendmail(FROM, TO, msg.as_string())
-        smtp.quit()
-        return True
-    except Exception as e:
-        print(e)
-        return False
+    smtp = smtplib.SMTP(SERVER, PORT)
+    if 'master_mail_usetls' in config_info.keys():
+        if config_info['master_mail_usetls'] == True:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.ehlo()
+    smtp.login(USERNAME, PASSWORD)
+    smtp.sendmail(FROM, TO, msg.as_string())
+    smtp.quit()
+    return True

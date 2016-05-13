@@ -154,14 +154,15 @@ def user_log():
 
     accounts_key = 'accounts:%s' % user.get('username')
     id_map = {}
-
     for acct in sorted(r_session.smembers(accounts_key)):
         account_key = 'account:%s:%s' % (user.get('username'), acct.decode("utf-8"))
         account_info = json.loads(r_session.get(account_key).decode("utf-8"))
-        if user_info.get('is_show_byname') != True:
-            id_map[account_info.get('user_id')]=account_info.get('username')
-        else:
+        if user_info.get('is_show_byname') == 0:
+            id_map[account_info.get('user_id')]=account_info.get('remark_name')
+        elif user_info.get('is_show_byname') == 1:
             id_map[account_info.get('user_id')]=account_info.get('account_name')
+        else:
+            id_map[account_info.get('user_id')]=account_info.get('username')
     for row in record_info.get('diary'):
         row['id']=id_map.get(row['id'])
         if '1day' == session.get('log_sel_time'):
@@ -203,6 +204,7 @@ def user_log():
 @app.route('/log/delete_sel')
 @requires_auth
 def user_log_delete_sel():
+    type_dict = {'0':'','1':'收取','2':'宝箱','3':'转盘','4':'进攻','5':'复仇','6':'提现','7':'状态'}
     user = session.get('user_info')
 
     record_key = '%s:%s' % ('record', user.get('username'))
@@ -407,7 +409,7 @@ def user_change_property(field, value):
     if field == 'is_show_wpdc':
         user_info['is_show_wpdc'] = int(value)
     if field == 'is_show_byname':
-        user_info['is_show_byname'] = True if value == '1' else False
+        user_info['is_show_byname'] = int(value)
     if field == 'auto_detect':
         user_info['auto_detect'] = True if value == '1' else False
         session['action'] = 'profile'

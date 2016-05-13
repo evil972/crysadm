@@ -211,3 +211,16 @@ def account_activel_all():
         r_session.set(account_key, json.dumps(account_info))
 
     return redirect(url_for('accounts'))
+
+# 设置备注名
+@app.route('/account/set_remark_name', methods=['POST'])
+@requires_auth
+def account_set_remark_name():
+    user_id = request.values.get('user_id')
+    remark_name = request.values.get('remark_name')
+    user = session.get('user_info')
+    account_key = 'account:%s:%s' % (user.get('username'), user_id)
+    account_info = json.loads(r_session.get(account_key).decode("utf-8"))
+    account_info['remark_name'] = remark_name
+    r_session.set(account_key, json.dumps(account_info))
+    return 'success'

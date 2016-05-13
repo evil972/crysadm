@@ -14,6 +14,16 @@ from message import send_msg
 @app.route('/admin/user')
 @requires_admin
 def admin_user():
+    err_msg = None
+    if session.get('error_message') is not None:
+        err_msg = session.get('error_message')
+        session['error_message'] = None
+
+    info_msg = None
+    if session.get('info_message') is not None:
+        info_msg = session.get('info_message')
+        session['info_message'] = None
+
     recent_login_users = []
     users = list()
 
@@ -30,7 +40,7 @@ def admin_user():
     return render_template('admin_user.html',
                            recent_login_users=sorted(recent_login_users, key=lambda k: k['login_as_time'],
                                                      reverse=True),
-                           users=users)
+                           users=users,err_msg=err_msg,info_msg=info_msg)
 
 # 系统管理 => 通知管理
 @app.route('/admin/message')
@@ -151,6 +161,11 @@ def admin_change_property(field, value, username):
         user_info['auto_revenge'] = True if value == '1' else False
     elif field == 'auto_getaward':
         user_info['auto_getaward'] = True if value == '1' else False
+    elif field == 'master_mail_usetls':
+        user_info['master_mail_usetls'] = True if value == '1' else False
+        session['action'] = 'info'
+        r_session.set(user_key, json.dumps(user_info))
+        return redirect(url_for('system_config'))
     elif field.endswith('_interval'):
         try:
             if int(str(request.values.get(field))) >= 1:
@@ -173,21 +188,30 @@ def admin_change_property(field, value, username):
 @requires_admin
 def admin_change_user_info(username):
     max_account_no = request.values.get('max_account_no')
+    root_no = request.values.get('root_no')
 
-    r = r"^[1-9]\d*$"
+    r = r"^[0-9]\d*$"
 
     if re.match(r, max_account_no) is None:
         session['error_message'] = '迅雷账号限制必须为整数.'
         return redirect(url_for(endpoint='admin_user_management', username=username))
 
+    if re.match(r, root_no) is None:
+        session['error_message'] = '剩余ROOT次数必须为整数'
+        return redirect(url_for(endpoint='admin_user_management', username=username))
+
     if not 0 < int(max_account_no) < 101:
         session['error_message'] = '迅雷账号限制必须为 1~100.'
+        return redirect(url_for(endpoint='admin_user_management', username=username))
+    if not 0 <= int(root_no) <= 200:
+        session['error_message'] = '剩余ROOT次数必须为 0~200.'
         return redirect(url_for(endpoint='admin_user_management', username=username))
 
     user_key = '%s:%s' % ('user', username)
     user_info = json.loads(r_session.get(user_key).decode('utf-8'))
 
     user_info['max_account_no'] = int(max_account_no)
+    user_info['root_no'] = int(root_no)
 
     r_session.set(user_key, json.dumps(user_info))
 
@@ -204,7 +228,9 @@ def admin_del_user(username):
     # do del user
     r_session.delete('%s:%s' % ('user', username))
     r_session.delete('%s:%s' % ('record', username))
+    r_session.delete('%s:%s' % ('extra_info', username))
     r_session.srem('users', username)
+    r_session.srem('email', username)
     for b_account_id in r_session.smembers('accounts:' + username):
         account_id = b_account_id.decode('utf-8')
         r_session.delete('account:%s:%s' % (username, account_id))
@@ -247,7 +273,7 @@ def admin_clear_no_device_user():
         username = b_user.decode('utf-8')
         accounts_count = r_session.smembers('accounts:%s' % username)
         if accounts_count is None or len(accounts_count) == 0:
-             admin_del_user(username)
+            admin_del_user(username)
         return redirect(url_for('admin_user'))
 
 # 系统管理 => 用户管理 => 删除无用户？
@@ -269,7 +295,9 @@ def del_none_user():
                 break
         if not has_active_account:
             none_active_xlAcct.append(username)
-            admin_del_user(username)
+            admin_del_u
+            
+            ser(username)
     return redirect(url_for('admin_user'))
 
 # 系统管理 => 通知管理 => 发送通知
@@ -420,5 +448,5 @@ def guest_invitation_delete():
 @requires_admin
 def admin_about():
     import platform
-    version = '当前版本：2016-05-10'
+    version = '当前版本：2016-05-12'
     return render_template('about.html', platform=platform, version=version)
