@@ -31,7 +31,7 @@ def get_data(username):
     start_time = datetime.now()
     try:
         for user_id in r_session.smembers('accounts:%s' % username):
-            time.sleep(2)
+            time.sleep(3)
             account_key = 'account:%s:%s' % (username, user_id.decode('utf-8'))
             account_info = json.loads(r_session.get(account_key).decode('utf-8'))
 
@@ -74,7 +74,6 @@ def get_data(username):
             else:
                 account_data = json.loads(exist_account_data.decode('utf-8'))
 
-            time.sleep(2)
             balance_log = get_balance_log(cookies)
             if balance_log.get('r') == 0 and 'ioi' in balance_log.keys():
                 account_data['ioi'] = balance_log['ioi']
@@ -133,9 +132,7 @@ def save_history(username):
     today_data['speed_stat'] = list()
     today_data['pdc_detail'] = []
     today_data['produce_stat'] = [] 
-    if 'award_income' not in today_data.keys():
-        today_data['award_income'] = 0
-    award_income = 0
+    today_data['award_income'] = 0
 
     for user_id in r_session.smembers('accounts:%s' % username):
         # 获取账号所有数据
@@ -161,9 +158,7 @@ def save_history(username):
             for ioi in data['ioi']:
                 if 'cn' in ioi.keys() and 'ct' in ioi.keys() and time.localtime(ioi['ct']).tm_mday == datetime.now().day:
                     if ioi['cn'].find('宝箱') != -1 or ioi['cn'].find('转盘') != -1:
-                        award_income += ioi['c']
-        if today_data['award_income'] < award_income:
-            today_data['award_income'] = award_income
+                        today_data['award_income'] += ioi['c']
         for device in data.get('device_info'):
             today_data['last_speed'] += int(int(device.get('dcdn_upload_speed')) / 1024)
             today_data['deploy_speed'] += int(device.get('dcdn_download_speed') / 1024)
@@ -191,18 +186,12 @@ def save_history(username):
             detail_adjust_dict={}
             for stat in yesterday_data['produce_stat']:
                 if stat['mid'] in td_produce.keys():
-                    stat['hourly_list'][24] = td_produce[stat['mid']][23-datetime.strptime(today_data['updated_time'],'%Y-%m-%d %H:%M:%S').hour]
-                    stat['hourly_list'][0] = 0
-                    detail_adjust_dict[stat['mid']] = sum(stat['hourly_list'])
-            pdc_detail=[]
-            if 'pdc_detail' in yesterday_data.keys():
-                for pdc_info in yesterday_data['pdc_detail']:
-                    if pdc_info['mid'] in detail_adjust_dict.keys():
-                        pdc_detail.append(dict(mid=pdc_info['mid'], pdc=detail_adjust_dict[pdc_info['mid']]))
-                    else:
-                        pdc_detail.append(pdc_info)
-                yesterday_data['pdc_detail'] = pdc_detail
-            print(pdc_detail)
+                    last_hour_pdc=td_produce[stat['mid']][23-datetime.strptime(today_data['updated_time'],'%Y-%m-%d %H:%M:%S').hour]
+                    detail_adjust_dict[stat['mid']] = last_hour_pdc - stat['hourly_list'][24]
+                    stat['hourly_list'][24] = last_hour_pdc
+            for pdc_info in yesterday_data.get('pdc_detail'):
+                if pdc_info.get('mid') is not None and pdc_info.get('pdc') is not None:
+                    pdc_info['pdc'] += detail_adjust_dict[pdc_info.get('mid')]
         r_session.setex(yesterday_key, json.dumps(yesterday_data), 3600 * 24 * 34)
         extra_info['last_adjust_date']=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         r_session.set(extra_info_key,json.dumps(extra_info))
@@ -349,11 +338,6 @@ def select_auto_task_user():
 def check_report(user, cookies, user_info):
     from mailsand import send_email
     from mailsand import validateEmail
-    config_key = '%s:%s' % ('user', 'system')
-    r_config_info = r_session.get(config_key)
-    if r_config_info is not None:
-        config_info = json.loads(r_config_info.decode('utf-8'))
-        
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'check_report')
     extra_info_key='extra_info:%s' % (user_info.get('username'))
     b_extra_info=r_session.get(extra_info_key)
@@ -665,7 +649,7 @@ def drawcash_crystal():
     print(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'drawcash_crystal')
     time_now = datetime.now()
     if int(time_now.isoweekday()) != 2: return
-    if int(time_now.hour) < 12 or int(time_now.hour) >= 18: return
+    if int(time_now.hour) < 12 or int(time_now.hour) > 18: return
 
     cookies_auto(check_drawcash, 'global:auto.drawcash.cookies')
 #    for cookie in r_session.smembers('global:auto.drawcash.cookies'):

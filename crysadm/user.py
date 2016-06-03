@@ -135,10 +135,10 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
     
+type_dict = {'0':'','1':'收取','2':'宝箱','3':'转盘','4':'进攻','5':'复仇','6':'提现','7':'状态'}
 @app.route('/log')
 @requires_auth
 def user_log():
-    type_dict = {'0':'','1':'收取','2':'宝箱','3':'转盘','4':'进攻','5':'复仇','6':'提现','7':'状态'}
     log_as = []
     user = session.get('user_info')
     if request.args.get('time') is not None:
@@ -154,40 +154,19 @@ def user_log():
 
     accounts_key = 'accounts:%s' % user.get('username')
     id_map = {}
+
     for acct in sorted(r_session.smembers(accounts_key)):
         account_key = 'account:%s:%s' % (user.get('username'), acct.decode("utf-8"))
         account_info = json.loads(r_session.get(account_key).decode("utf-8"))
-        if user_info.get('is_show_byname') == 0:
-            id_map[account_info.get('user_id')]=account_info.get('remark_name')
-        elif user_info.get('is_show_byname') == 1:
-            id_map[account_info.get('user_id')]=account_info.get('account_name')
-        else:
+        if user_info.get('is_show_byname') != True:
             id_map[account_info.get('user_id')]=account_info.get('username')
+        else:
+            id_map[account_info.get('user_id')]=account_info.get('account_name')
     for row in record_info.get('diary'):
         row['id']=id_map.get(row['id'])
         if '1day' == session.get('log_sel_time'):
             if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days < 1:
                 if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1:
-                    log_as.append(row)
-        elif '3day' == session.get('log_sel_time'):
-            if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days < 3:
-                if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1: log_as.append(row)
-        elif 'important' == session.get('log_sel_time'):
-            if row.get('type') == '收取':
-                log_as.append(row)
-            elif row.get('type') == '宝箱':
-                if row.get('gets').find('开启') != -1:
-                    log_as.append(row)
-            elif row.get('type') == '转盘':
-                if row.get('gets').find('水晶') != -1:
-                    log_as.append(row)
-            elif row.get('type') == '提现':
-                if row.get('gets').find('成功') != -1:
-                    log_as.append(row)
-                elif row.get('gets').find('风控') != -1:
-                    log_as.append(row)
-            elif row.get('type') == '状态':
-                if row.get('gets').find('在线') != -1:
                     log_as.append(row)
         elif 'all' == session.get('log_sel_time'):
             if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1: log_as.append(row)
@@ -204,7 +183,6 @@ def user_log():
 @app.route('/log/delete_sel')
 @requires_auth
 def user_log_delete_sel():
-    type_dict = {'0':'','1':'收取','2':'宝箱','3':'转盘','4':'进攻','5':'复仇','6':'提现','7':'状态'}
     user = session.get('user_info')
 
     record_key = '%s:%s' % ('record', user.get('username'))
@@ -219,27 +197,8 @@ def user_log_delete_sel():
             else:
                 if row.get('type').find(str(type_dict.get(session.get('log_sel_type')))) == -1:
                     diary.append(row)
-        elif '3day' == session.get('log_sel_time'):
-            if (datetime.now().date() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S').date()).days >= 3:
-                diary.append(row)
-            else:
-                if row.get('type').find(str(type_dict.get(session.get('log_sel_type'))))!=-1:
-                    diary.append(row)
         elif 'all' == session.get('log_sel_time'):
             if row.get('type').find(str(type_dict.get(session.get('log_sel_type')))) == -1: diary.append(row)
-        elif 'important' == session.get('log_sel_time'):
-            if row.get('type') == '宝箱':
-                if row.get('gets').find('开启') == -1:
-                    log_as.append(row)
-            elif row.get('type') == '转盘':
-                if row.get('gets').find('水晶') == -1:
-                    log_as.append(row)
-            elif row.get('type') == '提现':
-                if row.get('gets').find('成功') == -1 and row.get('gets').find('风控') == -1:
-                    log_as.append(row)
-            elif row.get('type') == '状态':
-                if row.get('gets').find('在线') == -1:
-                    log_as.append(row)
         else:
             if (datetime.now() - datetime.strptime(row.get('time'), '%Y-%m-%d %H:%M:%S')).days >= 7:
                 diary.append(row)
@@ -409,7 +368,7 @@ def user_change_property(field, value):
     if field == 'is_show_wpdc':
         user_info['is_show_wpdc'] = int(value)
     if field == 'is_show_byname':
-        user_info['is_show_byname'] = int(value)
+        user_info['is_show_byname'] = True if value == '1' else False
     if field == 'auto_detect':
         user_info['auto_detect'] = True if value == '1' else False
         session['action'] = 'profile'
